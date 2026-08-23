@@ -81,6 +81,29 @@ npx --yes pnpm@10.12.1 typecheck && npx --yes pnpm@10.12.1 lint && npx --yes pnp
 
 All four green, plus: new domain logic has a test in `tests/`, `revalidatePath` called for every mutated view, ownership enforced, dark mode checked.
 
+## MCP server (AI agent access)
+
+`POST /api/mcp` is a stateless Streamable-HTTP MCP endpoint (`src/app/api/mcp/route.ts`, tools in `src/lib/mcp/tools.ts`). Auth is a per-user API key (Bearer `skp_…`, sha256-hashed in the `api_keys` table); users create/revoke keys at `/settings` via `src/actions/api-key.actions.ts`.
+
+Rules:
+
+- Tools must go through `src/lib/services/*` + zod validators — same layering as actions. Never query the DB or hit Yahoo/CoinGecko from tool callbacks directly.
+- Ownership: every portfolio-scoped tool routes through `assertOwnedPortfolio` (`src/lib/services/portfolio-service.ts`).
+- Mutating tools call `revalidateMutated()` so UI caches stay consistent.
+- Client config example:
+
+```json
+{
+  "mcpServers": {
+    "portfolio": {
+      "type": "http",
+      "url": "https://<host>/api/mcp",
+      "headers": { "Authorization": "Bearer skp_..." }
+    }
+  }
+}
+```
+
 ## Deployment (Dokploy)
 
 Compose project from this repo: `db` (postgres:16-alpine, volume `pgdata`) + `app` (built from `Dockerfile`). Required env in Dokploy UI: `POSTGRES_PASSWORD`, `AUTH_SECRET` (32+ random chars). Migrations run on boot via entrypoint; healthcheck hits `/api/health`; cron jobs start automatically with the server (`CRON_ENABLED=false` disables).

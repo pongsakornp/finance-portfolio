@@ -6,7 +6,7 @@ import { users } from "@/lib/db/schema";
 import { requireUserId } from "@/lib/session";
 
 import { CurrencySwitcher } from "@/components/currency-switcher";
-import { SidebarNav } from "@/components/sidebar-nav";
+import { SidebarFooter, SidebarNav } from "@/components/sidebar-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ export default async function AppLayout({
           <span className="font-semibold tracking-tight">Portfolio</span>
         </div>
         <nav className="flex flex-col gap-1">{<SidebarNav />}</nav>
+        <div className="mt-auto border-t pt-3">{<SidebarFooter />}</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -51,13 +52,14 @@ export default async function AppLayout({
                 <MenuIcon className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-4">
+            <SheetContent side="left" className="flex w-64 flex-col p-4">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2 text-base">
                   <Wallet2Icon className="h-4 w-4" /> Portfolio
                 </SheetTitle>
               </SheetHeader>
               <nav className="mt-4 flex flex-col gap-1">{<SidebarNav />}</nav>
+              <div className="mt-auto border-t pt-3">{<SidebarFooter />}</div>
             </SheetContent>
           </Sheet>
           <div className="ml-auto flex items-center gap-1">
