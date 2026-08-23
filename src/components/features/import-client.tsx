@@ -27,18 +27,22 @@ import {
 type ParsedRow = {
   symbol: string;
   name?: string;
-  assetType: "stock" | "etf" | "crypto";
+  assetType: "stock" | "etf" | "crypto" | "commodity" | "cash";
   type: "buy" | "sell" | "dividend";
   quantity: number;
   price: number;
   fee: number;
   occurredAt: string;
+  currency?: string; // cash only
 };
 
-const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date
-AAPL,,stock,buy,10,150.25,1.99,2025-06-01
-BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15
-PTT.BK,,stock,dividend,500,0,0,2025-08-20`;
+const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency
+AAPL,,stock,buy,10,150.25,1.99,2025-06-01,
+BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15,
+XAUUSD=X,Gold,commodity,buy,1,2400,0,2025-08-01,
+USD,Cash (USD),cash,buy,5000,1,0,2025-08-10,USD
+THB,Cash (THB),cash,buy,150000,1,0,2025-08-10,THB
+PTT.BK,,stock,dividend,500,0,0,2025-08-20,`;
 
 export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; name: string }> }) {
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -69,6 +73,7 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
             price: parseFloat(r.price ?? "0") || 0,
             fee: parseFloat(r.fee ?? "0") || 0,
             occurredAt: (r.date ?? r.occurred_at ?? "").trim(),
+            currency: r.currency?.trim().toUpperCase() || undefined,
           });
         }
         setRows(parsed.filter((p) => !isNaN(p.quantity)));

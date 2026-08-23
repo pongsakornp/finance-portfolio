@@ -1,0 +1,1 @@
+ALTER TYPE "public"."asset_type" ADD VALUE 'mutualfund';

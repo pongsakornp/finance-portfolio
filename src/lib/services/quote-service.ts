@@ -9,7 +9,7 @@ export type Quote = {
   assetId: string;
   symbol: string;
   name: string;
-  type: "stock" | "etf" | "crypto";
+  type: "stock" | "etf" | "crypto" | "commodity" | "cash" | "mutualfund";
   currency: string;
   price: number;
   previousClose: number | null;
@@ -63,14 +63,51 @@ async function fetchCoinGecko(id: string): Promise<{ price: number; previousClos
   };
 }
 
+type FinnomenaHistory = {
+  s: string;
+  t?: number[];
+  c?: number[];
+};
+
+/**
+ * Thai mutual fund NAV via Finnomena's public (unofficial) TradingView-style API.
+ * NAV updates once daily EOD — price = latest close, previousClose = prior day.
+ * ponytail: undocumented endpoint, may change without notice; stale-cache fallback covers outages.
+ */
+async function fetchFinnomena(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+  const to = Math.floor(Date.now() / 1000) + 86400;
+  const from = to - 14 * 86400;
+  const res = await fetch(
+    `https://www.finnomena.com/fn3/api/fund/v2/public/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1D&from=${from}&to=${to}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Finnomena ${symbol}: HTTP ${res.status}`);
+  const json = (await res.json()) as FinnomenaHistory;
+  const closes = json.c ?? [];
+  if (json.s !== "ok" || closes.length === 0) {
+    throw new Error(`Finnomena ${symbol}: no NAV`);
+  }
+  const last = closes[closes.length - 1];
+  const prev = closes.length > 1 ? closes[closes.length - 2] : null;
+  return { price: last, previousClose: prev, currency: "THB" };
+}
+
 function ttlFor(type: Asset["type"]): number {
   // crypto trades 24/7 → refresh faster than market-hours assets
-  return type === "crypto" ? 60_000 : 5 * 60_000;
+  // mutual fund NAV updates once daily after market close → 6h is plenty
+  if (type === "crypto") return 60_000;
+  if (type === "mutualfund") return 6 * 60 * 60_000;
+  return 5 * 60_000;
 }
 
 /** Quote with DB-backed TTL cache. All pages go through this — never call Yahoo/CoinGecko directly. */
 export async function getQuote(asset: Asset): Promise<Quote> {
   const base = { assetId: asset.id, symbol: asset.symbol, name: asset.name, type: asset.type };
+
+  // cash has no market price — always worth exactly 1 of its own currency
+  if (asset.type === "cash") {
+    return { ...base, currency: asset.currency, price: 1, previousClose: null };
+  }
 
   const [cached] = await db
     .select()
@@ -91,7 +128,9 @@ export async function getQuote(asset: Asset): Promise<Quote> {
     const fresh =
       asset.type === "crypto"
         ? await fetchCoinGecko(asset.externalId ?? asset.symbol.toLowerCase())
-        : await fetchYahoo(asset.symbol);
+        : asset.type === "mutualfund"
+          ? await fetchFinnomena(asset.symbol)
+          : await fetchYahoo(asset.symbol);
 
     await db
       .insert(priceCache)

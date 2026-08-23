@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const ASSET_TYPES = [
+  "stock",
+  "etf",
+  "crypto",
+  "commodity",
+  "cash",
+  "mutualfund",
+] as const;
+
 export const upsertAssetSchema = z.object({
   symbol: z
     .string()
@@ -7,7 +16,7 @@ export const upsertAssetSchema = z.object({
     .max(20)
     .transform((s) => s.trim().toUpperCase()),
   name: z.string().min(1).max(80),
-  type: z.enum(["stock", "etf", "crypto"]),
+  type: z.enum(ASSET_TYPES),
   currency: z.string().length(3).default("USD"),
   externalId: z.string().max(60).optional(),
 });
@@ -15,9 +24,11 @@ export const upsertAssetSchema = z.object({
 export const createTransactionSchema = z.object({
   portfolioId: z.uuid(),
   symbol: z.string().min(1).max(20),
-  assetType: z.enum(["stock", "etf", "crypto"]),
+  assetType: z.enum(ASSET_TYPES),
   assetName: z.string().min(1).max(80).optional(),
   externalId: z.string().max(60).optional(),
+  // only used for cash assets (crypto forces USD, stock/ETF auto-detects)
+  assetCurrency: z.string().length(3).optional(),
   type: z.enum(["buy", "sell", "dividend"]),
   quantity: z.coerce.number().positive("Must be > 0"),
   price: z.coerce.number().nonnegative("Must be >= 0"),
