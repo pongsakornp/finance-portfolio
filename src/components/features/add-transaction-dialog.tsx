@@ -37,6 +37,7 @@ export function AddTransactionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [assetType, setAssetType] = useState("stock");
+  const [cashCurrency, setCashCurrency] = useState("USD");
   const [txType, setTxType] = useState("buy");
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -128,6 +129,9 @@ export function AddTransactionDialog({
                   <SelectItem value="stock">Stock</SelectItem>
                   <SelectItem value="etf">ETF</SelectItem>
                   <SelectItem value="crypto">Crypto</SelectItem>
+                  <SelectItem value="commodity">Commodity</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="mutualfund">Mutual Fund (TH)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -137,10 +141,36 @@ export function AddTransactionDialog({
               <Input
                 name="symbol"
                 required
-                placeholder={assetType === "crypto" ? "BTC" : "AAPL / PTT.BK"}
+                placeholder={
+                  assetType === "crypto"
+                    ? "BTC"
+                    : assetType === "commodity"
+                      ? "XAUUSD=X (gold), CL=F (oil)"
+                      : assetType === "cash"
+                        ? "USD"
+                        : assetType === "mutualfund"
+                          ? "B-EQUITY (Finnomena code)"
+                          : "AAPL / PTT.BK / TDEX.BK"
+                }
                 className="uppercase"
               />
             </div>
+
+            {assetType === "cash" && (
+              <div className="space-y-1.5">
+                <Label>Currency</Label>
+                <input type="hidden" name="assetCurrency" value={cashCurrency} />
+                <Select defaultValue={cashCurrency} onValueChange={setCashCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="THB">THB</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {assetType === "crypto" && (
               <div className="space-y-1.5">
@@ -154,6 +184,19 @@ export function AddTransactionDialog({
                 <Label>Cash amount</Label>
                 <Input name="quantity" type="number" step="any" min="0" required />
               </div>
+            ) : assetType === "cash" ? (
+              <>
+                {/* cash is priced at exactly 1 unit of its own currency */}
+                <input type="hidden" name="price" value="1" />
+                <div className="space-y-1.5">
+                  <Label>Amount</Label>
+                  <Input name="quantity" type="number" step="any" min="0" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fee</Label>
+                  <Input name="fee" type="number" step="any" min="0" defaultValue={0} />
+                </div>
+              </>
             ) : (
               <>
                 <div className="space-y-1.5">

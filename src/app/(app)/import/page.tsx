@@ -16,7 +16,7 @@ export default async function ImportPage() {
         <CardHeader>
           <CardTitle className="text-base">CSV import</CardTitle>
           <CardDescription>
-            Columns: symbol, name (optional), asset_type (stock|etf|crypto), type
+            Columns: symbol, name (optional), asset_type (stock|etf|crypto|commodity|cash|mutualfund), type
             (buy|sell|dividend), quantity, price, fee, date (YYYY-MM-DD)
           </CardDescription>
         </CardHeader>
