@@ -9,6 +9,7 @@ import {
   FileInputIcon,
   LayoutDashboardIcon,
   ScrollTextIcon,
+  SettingsIcon,
   WalletIcon,
 } from "lucide-react";
 
@@ -41,5 +42,21 @@ export function SidebarNav() {
         </Link>
       ))}
     </>
+  );
+}
+
+export function SidebarFooter() {
+  const pathname = usePathname();
+  return (
+    <Link
+      href="/settings"
+      className={cn(
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+        pathname.startsWith("/settings") && "bg-accent text-accent-foreground"
+      )}
+    >
+      <SettingsIcon className="h-4 w-4" />
+      Settings
+    </Link>
   );
 }

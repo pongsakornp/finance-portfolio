@@ -22,7 +22,9 @@ export const authConfig = {
         path.startsWith("/login") ||
         path.startsWith("/register") ||
         path.startsWith("/api/auth") ||
-        path.startsWith("/api/health");
+        path.startsWith("/api/health") ||
+        // MCP endpoint authenticates itself via Bearer API key
+        path.startsWith("/api/mcp");
 
       if (!isPublic) return isLoggedIn;
       if (isLoggedIn && (path === "/login" || path === "/register")) {

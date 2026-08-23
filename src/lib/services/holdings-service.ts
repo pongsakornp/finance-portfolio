@@ -118,3 +118,16 @@ export function computeTotals(
     dayChangePct: prevMv > 0 ? parseFloat(((dayChange / prevMv) * 100).toFixed(2)) : 0,
   };
 }
+
+/** Hypothetical sell at current price — pure, records nothing. Assumes zero fee. */
+export function whatIfSell(position: Position, quantity: number) {
+  const q = new Decimal(Math.min(quantity, position.qty));
+  const price = new Decimal(position.currentPrice);
+  const avg = new Decimal(position.avgCost);
+  return {
+    sellQty: r6(q),
+    remainingQty: r6(Decimal.max(new Decimal(position.qty).minus(q), 0)),
+    estimatedProceeds: r2(q.mul(price)),
+    estimatedRealizedPL: r2(q.mul(price.minus(avg))),
+  };
+}

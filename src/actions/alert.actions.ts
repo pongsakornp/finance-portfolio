@@ -8,7 +8,7 @@ import { alerts } from "@/lib/db/schema";
 import { requireUserId } from "@/lib/session";
 import { createAlertSchema } from "@/lib/validators/alert.schema";
 
-import { upsertAsset } from "./transaction.actions";
+import { upsertAsset } from "@/lib/services/transaction-service";
 
 export async function createAlertAction(formData: FormData) {
   const userId = await requireUserId();

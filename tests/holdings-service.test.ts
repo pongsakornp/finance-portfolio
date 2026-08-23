@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computePosition,
   computeTotals,
+  whatIfSell,
 } from "@/lib/services/holdings-service";
 
 const tx = (
@@ -84,5 +85,23 @@ describe("computeTotals", () => {
     expect(totals.costBasis).toBe(400);
     expect(totals.unrealizedPL).toBe(30);
     expect(totals.dayChange).toBeCloseTo(10, 5); // (110-105)*2 for asset A only
+  });
+});
+
+describe("whatIfSell", () => {
+  it("estimates proceeds and realized P/L without mutating", () => {
+    const pos = computePosition([tx("buy", 10, 100)], 120);
+    expect(whatIfSell(pos, 4)).toEqual({
+      sellQty: 4,
+      remainingQty: 6,
+      estimatedProceeds: 480,
+      estimatedRealizedPL: 80,
+    });
+  });
+
+  it("clamps to the held quantity on oversell requests", () => {
+    const pos = computePosition([tx("buy", 2, 50)], 60);
+    expect(whatIfSell(pos, 99).sellQty).toBe(2);
+    expect(whatIfSell(pos, 99).remainingQty).toBe(0);
   });
 });

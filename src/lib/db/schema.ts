@@ -122,6 +122,25 @@ export const snapshots = pgTable(
   (t) => [uniqueIndex("snapshots_portfolio_day_uq").on(t.portfolioId, t.day)]
 );
 
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(), // sha256 of the plaintext token
+    prefix: text("prefix").notNull(), // display hint only, e.g. "skp_ab12cd34"
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("api_keys_hash_uq").on(t.keyHash)]
+);
+
 export const alerts = pgTable("alerts", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")
