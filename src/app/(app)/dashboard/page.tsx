@@ -60,6 +60,8 @@ export default async function DashboardPage() {
     stock: "Stocks",
     etf: "ETFs",
     crypto: "Crypto",
+    commodity: "Commodities",
+    cash: "Cash",
   };
   const allocation = [...byType.entries()]
     .sort((a, b) => b[1] - a[1])

@@ -1,6 +1,6 @@
 {
-  "id": "e34bfc2a-c83a-4b46-b484-57daf05ff304",
-  "prevId": "a8bf13dd-6e81-4903-b7b2-c089eb2d4372",
+  "id": "a49a61f4-0716-4172-9527-634afb750bd1",
+  "prevId": "e34bfc2a-c83a-4b46-b484-57daf05ff304",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -663,7 +663,8 @@
         "etf",
         "crypto",
         "commodity",
-        "cash"
+        "cash",
+        "mutualfund"
       ]
     },
     "public.tx_type": {

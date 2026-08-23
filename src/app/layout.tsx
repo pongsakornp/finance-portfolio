@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Finance Portfolio",
-  description: "Track stocks, ETFs and crypto across portfolios",
+  description: "Track stocks, ETFs, crypto, commodities and cash across portfolios",
 };
 
 export default function RootLayout({

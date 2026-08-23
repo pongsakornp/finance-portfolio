@@ -12,8 +12,22 @@
     {
       "idx": 1,
       "version": "7",
+      "when": 1787487391741,
+      "tag": "0001_graceful_black_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787488554371,
+      "tag": "0002_awesome_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
       "when": 1787488576627,
-      "tag": "0001_sticky_toxin",
+      "tag": "0003_sticky_toxin",
       "breakpoints": true
     }
   ]

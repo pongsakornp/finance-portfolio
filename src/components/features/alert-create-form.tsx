@@ -47,6 +47,8 @@ export function AlertCreateForm() {
             <SelectItem value="stock">Stock</SelectItem>
             <SelectItem value="etf">ETF</SelectItem>
             <SelectItem value="crypto">Crypto</SelectItem>
+            <SelectItem value="commodity">Commodity</SelectItem>
+            <SelectItem value="mutualfund">Mutual Fund (TH)</SelectItem>
           </SelectContent>
         </Select>
       </div>

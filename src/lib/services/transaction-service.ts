@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
 import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
 import {
+  ASSET_TYPES,
   createTransactionSchema,
   type CreateTransactionInput,
   type UpsertAssetInput,
@@ -12,12 +13,13 @@ import {
 export type ImportRow = {
   symbol: string;
   name?: string;
-  assetType: "stock" | "etf" | "crypto";
+  assetType: (typeof ASSET_TYPES)[number];
   type: "buy" | "sell" | "dividend";
   quantity: number;
   price: number;
   fee?: number;
   occurredAt: string; // ISO date
+  currency?: string; // cash only
 };
 
 /** find-or-create by (symbol, type) — asset rows are shared across users */
@@ -56,7 +58,11 @@ export async function createTransaction(
     currency:
       data.assetType === "crypto"
         ? "USD"
-        : undefined, // stock/ETF currency auto-detected on first quote fetch
+        : data.assetType === "cash"
+          ? (data.assetCurrency?.toUpperCase() ?? "USD")
+          : data.assetType === "mutualfund"
+            ? "THB" // Finnomena NAV is always THB
+            : undefined, // stock/ETF/commodity currency auto-detected on first quote fetch
     externalId: data.externalId,
   });
 
@@ -114,7 +120,14 @@ export async function importTransactions(
       symbol: d.symbol,
       name: d.assetName ?? "",
       type: d.assetType,
-      currency: d.assetType === "crypto" ? "USD" : undefined,
+      currency:
+        d.assetType === "crypto"
+          ? "USD"
+          : d.assetType === "cash"
+            ? (row.currency?.toUpperCase() ?? "USD")
+            : d.assetType === "mutualfund"
+              ? "THB"
+              : undefined,
       externalId: d.externalId,
     });
     await db.insert(transactions).values({

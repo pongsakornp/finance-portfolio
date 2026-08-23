@@ -45,8 +45,30 @@ async function coingeckoHistory(id: string): Promise<Map<string, number>> {
   return out;
 }
 
+/** Thai mutual fund NAV history from Finnomena's public API. */
+async function finnomenaHistory(symbol: string): Promise<Map<string, number>> {
+  const to = Math.floor(Date.now() / 1000) + 86400;
+  const from = to - 366 * 86400;
+  const res = await fetch(
+    `https://www.finnomena.com/fn3/api/fund/v2/public/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1D&from=${from}&to=${to}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Finnomena history ${symbol}: HTTP ${res.status}`);
+  const json = (await res.json()) as { s: string; t?: number[]; c?: number[] };
+  const out = new Map<string, number>();
+  if (json.s === "ok") {
+    json.t?.forEach((ts, i) => {
+      const close = json.c?.[i];
+      if (close != null) out.set(dayKey(new Date(ts * 1000)), close);
+    });
+  }
+  return out;
+}
+
 /** Backfills daily closes into price_history when stale (>3 days). */
 async function ensureHistory(asset: Asset): Promise<void> {
+  // cash never moves — nothing to fetch
+  if (asset.type === "cash") return;
   const cutoff = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
   const [latest] = await db
     .select({ day: priceHistory.day })
@@ -60,7 +82,9 @@ async function ensureHistory(asset: Asset): Promise<void> {
     const closes =
       asset.type === "crypto"
         ? await coingeckoHistory(asset.externalId ?? asset.symbol.toLowerCase())
-        : await yahooHistory(asset.symbol);
+        : asset.type === "mutualfund"
+          ? await finnomenaHistory(asset.symbol)
+          : await yahooHistory(asset.symbol);
     if (closes.size === 0) return;
     const rows = [...closes.entries()].map(([day, close]) => ({
       assetId: asset.id,
@@ -137,7 +161,14 @@ export async function portfolioSeries(
   const daysUnion = new Set<string>();
   closeMaps.forEach((m) => m.forEach((_, d) => d >= fromDay && daysUnion.add(d)));
   const timeline = [...daysUnion].sort();
-  if (timeline.length === 0) return [];
+  if (timeline.length === 0) {
+    // cash-only portfolio: no price history anywhere — synthesize a plain daily timeline
+    if (!distinctAssets.some((a) => a.type === "cash")) return [];
+    const end = Date.now();
+    for (let t = new Date(fromDay + "T00:00:00Z").getTime(); t <= end; t += 86400_000)
+      timeline.push(dayKey(new Date(t)));
+    if (timeline.length === 0) return [];
+  }
 
   const holdings = new Map<string, { qty: number }>();
   let ti = 0;
@@ -157,7 +188,9 @@ export async function portfolioSeries(
     }
     let value = 0;
     for (const a of distinctAssets) {
-      const close = closeMaps.get(a.id)?.get(day);
+      // cash has no history rows — constant price 1 in its own currency
+      const close =
+        closeMaps.get(a.id)?.get(day) ?? (a.type === "cash" ? 1 : undefined);
       if (close != null) lastClose.set(a.id, close);
       const lc = lastClose.get(a.id);
       const qty = holdings.get(a.id)?.qty ?? 0;

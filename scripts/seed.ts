@@ -53,6 +53,12 @@ async function main() {
     btc: await upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD", externalId: "bitcoin" }),
     eth: await upsertAsset({ symbol: "ETH", name: "Ethereum", type: "crypto", currency: "USD", externalId: "ethereum" }),
     ptt: await upsertAsset({ symbol: "PTT.BK", name: "PTT PCL", type: "stock", currency: "THB" }),
+    bequity: await upsertAsset({
+      symbol: "B-EQUITY",
+      name: "กองทุนเปิดบัวหลวงหุ้นทุน",
+      type: "mutualfund",
+      currency: "THB",
+    }),
   };
 
   const txs: Array<typeof transactions.$inferInsert> = [
@@ -68,6 +74,8 @@ async function main() {
     { portfolioId: portfolio.id, assetId: ids.eth, type: "sell", quantity: "0.6", price: "3050", fee: "0", occurredAt: daysAgo(60) },
     { portfolioId: portfolio.id, assetId: ids.ptt, type: "buy", quantity: "300", price: "34.25", fee: "105.00", occurredAt: daysAgo(200) },
     { portfolioId: portfolio.id, assetId: ids.ptt, type: "dividend", quantity: "1026", price: "0", note: "THB cash dividend", occurredAt: daysAgo(45) },
+    { portfolioId: portfolio.id, assetId: ids.bequity, type: "buy", quantity: "1000", price: "24.50", fee: "0", occurredAt: daysAgo(200) },
+    { portfolioId: portfolio.id, assetId: ids.bequity, type: "buy", quantity: "500", price: "27.20", fee: "0", occurredAt: daysAgo(60) },
   ];
   await db.insert(transactions).values(txs);
 

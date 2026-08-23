@@ -13,7 +13,14 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const assetTypeEnum = pgEnum("asset_type", ["stock", "etf", "crypto"]);
+export const assetTypeEnum = pgEnum("asset_type", [
+  "stock",
+  "etf",
+  "crypto",
+  "commodity",
+  "cash",
+  "mutualfund",
+]);
 export const txTypeEnum = pgEnum("tx_type", ["buy", "sell", "dividend"]);
 export const alertDirectionEnum = pgEnum("alert_direction", ["above", "below"]);
 
