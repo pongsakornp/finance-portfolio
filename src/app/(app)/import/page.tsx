@@ -1,5 +1,6 @@
 import { ImportClient } from "@/components/features/import-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { getUserPortfolios } from "@/lib/services/view-service";
 import { requireUserId } from "@/lib/session";
 
@@ -10,7 +11,7 @@ export default async function ImportPage() {
   const portfolios = await getUserPortfolios(userId);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Import transactions</h1>
       <Card>
         <CardHeader>
@@ -22,9 +23,9 @@ export default async function ImportPage() {
         </CardHeader>
         <CardContent>
           {portfolios.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Create a portfolio first.
-            </p>
+            <Empty className="p-8">
+              <EmptyDescription>Create a portfolio first.</EmptyDescription>
+            </Empty>
           ) : (
             <ImportClient portfolios={portfolios.map((p) => ({ id: p.id, name: p.name }))} />
           )}

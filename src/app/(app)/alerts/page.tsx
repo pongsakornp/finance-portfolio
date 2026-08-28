@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -49,7 +50,7 @@ export default async function AlertsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Price alerts</h1>
 
       <Card>
@@ -70,66 +71,116 @@ export default async function AlertsPage() {
         </CardHeader>
         <CardContent>
           {withQuotes.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No alerts configured.
-            </p>
+            <Empty className="p-8">
+              <EmptyDescription>No alerts configured.</EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead className="text-right">Current</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-20" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {withQuotes.map(({ alert, asset, price }) => {
-                  const hit =
-                    price !== null &&
-                    (alert.direction === "above"
-                      ? price >= parseFloat(alert.threshold)
-                      : price <= parseFloat(alert.threshold));
-                  return (
-                    <TableRow key={alert.id}>
-                      <TableCell className="font-medium">{asset.symbol}</TableCell>
-                      <TableCell>
-                        {alert.direction === "above" ? "≥" : "≤"}{" "}
-                        {fmtMoney(parseFloat(alert.threshold), asset.currency)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {price === null
-                          ? "—"
-                          : fmtMoney(price, asset.currency)}
-                      </TableCell>
-                      <TableCell>
-                        {alert.triggeredAt ? (
-                          <Badge variant="warning" title={fmtDate(alert.triggeredAt)}>
-                            Triggered {fmtDate(alert.triggeredAt)}
-                          </Badge>
-                        ) : !alert.active ? (
-                          <Badge variant="secondary">Paused</Badge>
-                        ) : hit ? (
-                          <Badge variant="success">Condition met</Badge>
-                        ) : (
-                          <Badge variant="outline">Watching</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <ToggleAlertButton
-                            action={toggleAlertActive.bind(null, alert.id, !alert.active)}
-                            active={alert.active}
-                          />
-                          <DeleteButton action={deleteAlertAction.bind(null, alert.id)} />
-                        </div>
-                      </TableCell>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asset</TableHead>
+                      <TableHead>Condition</TableHead>
+                      <TableHead className="text-right">Current</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-20" />
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {withQuotes.map(({ alert, asset, price }) => {
+                      const hit =
+                        price !== null &&
+                        (alert.direction === "above"
+                          ? price >= parseFloat(alert.threshold)
+                          : price <= parseFloat(alert.threshold));
+                      return (
+                        <TableRow key={alert.id}>
+                          <TableCell className="font-medium">{asset.symbol}</TableCell>
+                          <TableCell>
+                            {alert.direction === "above" ? "≥" : "≤"}{" "}
+                            {fmtMoney(parseFloat(alert.threshold), asset.currency)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {price === null
+                              ? "—"
+                              : fmtMoney(price, asset.currency)}
+                          </TableCell>
+                          <TableCell>
+                            {alert.triggeredAt ? (
+                              <Badge variant="warning" title={fmtDate(alert.triggeredAt)}>
+                                Triggered {fmtDate(alert.triggeredAt)}
+                              </Badge>
+                            ) : !alert.active ? (
+                              <Badge variant="secondary">Paused</Badge>
+                            ) : hit ? (
+                              <Badge variant="success">Condition met</Badge>
+                            ) : (
+                              <Badge variant="outline">Watching</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <ToggleAlertButton
+                                action={toggleAlertActive.bind(null, alert.id, !alert.active)}
+                                active={alert.active}
+                              />
+                              <DeleteButton action={deleteAlertAction.bind(null, alert.id)} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="md:hidden">
+                <div className="divide-y">
+                  {withQuotes.map(({ alert, asset, price }) => {
+                    const hit =
+                      price !== null &&
+                      (alert.direction === "above"
+                        ? price >= parseFloat(alert.threshold)
+                        : price <= parseFloat(alert.threshold));
+                    const status = alert.triggeredAt ? (
+                      <Badge variant="warning" title={fmtDate(alert.triggeredAt)}>
+                        Triggered {fmtDate(alert.triggeredAt)}
+                      </Badge>
+                    ) : !alert.active ? (
+                      <Badge variant="secondary">Paused</Badge>
+                    ) : hit ? (
+                      <Badge variant="success">Condition met</Badge>
+                    ) : (
+                      <Badge variant="outline">Watching</Badge>
+                    );
+                    return (
+                      <div key={alert.id} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{asset.symbol}</span>
+                          <div className="flex items-center gap-1">
+                            <ToggleAlertButton
+                              action={toggleAlertActive.bind(null, alert.id, !alert.active)}
+                              active={alert.active}
+                            />
+                            <DeleteButton action={deleteAlertAction.bind(null, alert.id)} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {alert.direction === "above" ? "≥" : "≤"}{" "}
+                            {fmtMoney(parseFloat(alert.threshold), asset.currency)}
+                          </span>
+                          <span className="tabular-nums">
+                            {price === null ? "—" : fmtMoney(price, asset.currency)}
+                          </span>
+                        </div>
+                        <div>{status}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

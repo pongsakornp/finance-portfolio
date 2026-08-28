@@ -16,7 +16,7 @@ export default async function SettingsPage() {
     .orderBy(desc(apiKeys.createdAt));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       <ApiKeysCard
         keys={keys.map((k) => ({

@@ -1,9 +1,13 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
+
+import { cn } from "@/lib/utils";
 
 import { Providers } from "@/components/providers";
 
 import "./globals.css";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +24,12 @@ export const metadata: Metadata = {
   description: "Track stocks, ETFs, crypto, commodities and cash across portfolios",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -29,7 +39,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={cn(`${geistSans.variable} ${geistMono.variable}`, "h-full antialiased", "font-sans", inter.variable)}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

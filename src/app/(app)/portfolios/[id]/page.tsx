@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
 import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
+import { HoldingsMobileList } from "@/components/features/holdings-mobile-list";
 import { DeleteButton } from "@/components/features/delete-button";
 import { PL, PLPct } from "@/components/pl";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -61,7 +63,7 @@ export default async function PortfolioDetailPage({
   const ledger = [...txs].reverse();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link href="/portfolios" className="text-xs text-muted-foreground hover:underline">
@@ -79,13 +81,13 @@ export default async function PortfolioDetailPage({
           title="Unrealized P/L"
           node={
             <>
-              <PL value={t.unrealizedPL} /> (<PLPct value={t.unrealizedPLPct} />)
+              <PL value={t.unrealizedPL} currency={baseCurrency} /> (<PLPct value={t.unrealizedPLPct} />)
             </>
           }
         />
         <Stat
           title="Realized P/L"
-          node={<PL value={t.realizedPL} />}
+          node={<PL value={t.realizedPL} currency={baseCurrency} />}
           sub={`Dividends ${fmtMoney(t.dividendsReceived, baseCurrency)}`}
         />
       </div>
@@ -96,46 +98,66 @@ export default async function PortfolioDetailPage({
         </CardHeader>
         <CardContent>
           {holdings.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No open positions.</p>
+            <Empty className="p-8">
+              <EmptyDescription>No open positions.</EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Avg cost</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead className="text-right">P/L</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {holdings.map((h) => (
-                  <TableRow key={h.asset.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{h.asset.symbol}</span>
-                        <Badge variant="outline" className="capitalize">{h.asset.type}</Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{fmtQty(h.position.qty)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtMoney(h.position.avgCost, h.asset.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtMoney(h.price, h.asset.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtMoney(h.valueUsd, baseCurrency)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <PL value={h.position.unrealizedPL} />
-                      <PLPct value={h.position.unrealizedPLPct} className="ml-1 text-xs" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asset</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Avg cost</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                      <TableHead className="text-right">P/L</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {holdings.map((h) => (
+                      <TableRow key={h.asset.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{h.asset.symbol}</span>
+                            <Badge variant="outline" className="capitalize">{h.asset.type}</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtQty(h.position.qty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(h.position.avgCost, h.asset.currency)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(h.price, h.asset.currency)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(h.valueUsd, baseCurrency)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <PL value={h.position.unrealizedPL} />
+                          <PLPct value={h.position.unrealizedPLPct} className="ml-1 text-xs" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <HoldingsMobileList
+                items={holdings.map((h) => ({
+                  key: h.asset.id,
+                  symbol: h.asset.symbol,
+                  name: "",
+                  type: h.asset.type,
+                  qty: fmtQty(h.position.qty),
+                  avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
+                  price: fmtMoney(h.price, h.asset.currency),
+                  value: fmtMoney(h.valueUsd, baseCurrency),
+                  pl: h.position.unrealizedPL,
+                  plPct: h.position.unrealizedPLPct,
+                }))}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -146,49 +168,92 @@ export default async function PortfolioDetailPage({
         </CardHeader>
         <CardContent>
           {ledger.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+            <Empty className="p-8">
+              <EmptyDescription>Nothing here yet.</EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead className="text-right">Qty / Amount</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead className="text-right">Qty / Amount</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledger.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>{fmtDate(tx.occurredAt)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                            }
+                            className="capitalize"
+                          >
+                            {tx.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {tx.type === "dividend"
+                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
+                            : fmtQty(parseFloat(tx.quantity))}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                        </TableCell>
+                        <TableCell>
+                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-col gap-2 md:hidden">
                 {ledger.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>{fmtDate(tx.occurredAt)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
-                        }
-                        className="capitalize"
-                      >
-                        {tx.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {tx.type === "dividend"
-                        ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                        : fmtQty(parseFloat(tx.quantity))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                    </TableCell>
-                    <TableCell>
-                      <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
-                    </TableCell>
-                  </TableRow>
+                  <Card key={tx.id}>
+                    <CardContent className="flex flex-col gap-1.5 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
+                        <Badge
+                          variant={
+                            tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                          }
+                          className="capitalize"
+                        >
+                          {tx.type}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="font-medium">{tx.asset.symbol}</span>
+                          <span className="text-sm text-muted-foreground"> · </span>
+                          <span className="tabular-nums">
+                            {tx.type === "dividend"
+                              ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
+                              : fmtQty(parseFloat(tx.quantity))}
+                          </span>
+                          {tx.type !== "dividend" && (
+                            <span className="tabular-nums text-muted-foreground">
+                              {" "}
+                              @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                            </span>
+                          )}
+                        </div>
+                        <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

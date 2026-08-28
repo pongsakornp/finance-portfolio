@@ -1,15 +1,17 @@
 "use client";
 
-import {
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
 
-const COLORS = [
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+
+const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
@@ -29,32 +31,34 @@ export function AllocationDonut({
       </div>
     );
   }
+
+  const items = data.map((d, i) => ({ ...d, id: String(i) }));
+  const config: ChartConfig = Object.fromEntries(
+    items.map((d, i) => [
+      d.id,
+      { label: d.label, color: CHART_COLORS[i % CHART_COLORS.length] },
+    ])
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ChartContainer config={config} className="mx-auto aspect-square max-h-[260px]">
       <PieChart>
         <Pie
-          data={data}
+          data={items}
           dataKey="value"
-          nameKey="label"
+          nameKey="id"
           innerRadius={60}
           outerRadius={90}
           paddingAngle={2}
           strokeWidth={0}
         >
-          {data.map((_, i) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          {items.map((d) => (
+            <Cell key={d.id} fill={`var(--color-${d.id})`} />
           ))}
         </Pie>
-        <Tooltip
-          formatter={(value) =>
-            Number(value).toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            })
-          }
-        />
-        <Legend />
+        <ChartTooltip content={<ChartTooltipContent nameKey="id" hideLabel />} />
+        <ChartLegend content={<ChartLegendContent nameKey="id" />} />
       </PieChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }

@@ -10,10 +10,17 @@ import {
   LayoutDashboardIcon,
   ScrollTextIcon,
   SettingsIcon,
+  Wallet2Icon,
   WalletIcon,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
@@ -24,39 +31,41 @@ const links = [
   { href: "/import", label: "Import / Export", icon: FileInputIcon },
 ];
 
+export function SidebarBrand() {
+  return (
+    <div className="flex h-10 w-full items-center gap-2 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+      <Wallet2Icon className="size-5 shrink-0" />
+      <span className="truncate group-data-[collapsible=icon]:hidden">Portfolio</span>
+    </div>
+  );
+}
+
 export function SidebarNav() {
   const pathname = usePathname();
   return (
-    <>
-      {links.map(({ href, label, icon: Icon }) => (
-        <Link
-          key={href}
-          href={href}
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-            pathname.startsWith(href) && "bg-accent text-accent-foreground"
-          )}
-        >
-          <Icon className="h-4 w-4" />
-          {label}
-        </Link>
-      ))}
-    </>
+    <SidebarGroup>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {links.map(({ href, label, icon: Icon }) => (
+            <SidebarMenuItem key={href}>
+              <SidebarMenuButton isActive={pathname.startsWith(href)} render={<Link href={href} />}>
+                <Icon />
+                <span>{label}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
 export function SidebarFooter() {
   const pathname = usePathname();
   return (
-    <Link
-      href="/settings"
-      className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-        pathname.startsWith("/settings") && "bg-accent text-accent-foreground"
-      )}
-    >
-      <SettingsIcon className="h-4 w-4" />
-      Settings
-    </Link>
+    <SidebarMenuButton isActive={pathname.startsWith("/settings")} render={<Link href="/settings" />}>
+      <SettingsIcon />
+      <span>Settings</span>
+    </SidebarMenuButton>
   );
 }

@@ -32,9 +32,9 @@ export function ToggleAlertButton({
       }
     >
       {active ? (
-        <PauseIcon className="h-4 w-4 text-muted-foreground" />
+        <PauseIcon className="text-muted-foreground" />
       ) : (
-        <PlayIcon className="h-4 w-4 text-muted-foreground" />
+        <PlayIcon className="text-muted-foreground" />
       )}
     </Button>
   );
