@@ -16,6 +16,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Field,
+  FieldContent,
+  FieldLabel,
+} from "@/components/ui/field";
 
 export function AddPortfolioDialog() {
   const [open, setOpen] = useState(false);
@@ -36,17 +41,24 @@ export function AddPortfolioDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <PlusIcon /> New portfolio
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          <Button size="sm">
+            <PlusIcon data-icon="inline-start" /> New portfolio
+          </Button>
+        }
+      />
       <DialogContent className="max-w-sm">
-        <form ref={formRef} action={submit} className="space-y-4">
+        <form ref={formRef} action={submit} className="flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>New portfolio</DialogTitle>
           </DialogHeader>
-          <Input name="name" placeholder="e.g. Long-term / Trading" required maxLength={60} />
+          <Field>
+            <FieldLabel htmlFor="pname">Name</FieldLabel>
+            <FieldContent>
+              <Input id="pname" name="name" placeholder="e.g. Long-term / Trading" required maxLength={60} />
+            </FieldContent>
+          </Field>
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               Create

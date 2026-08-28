@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -65,7 +66,7 @@ export default async function ReportsPage() {
   const rows = monthlyBreakdown(usdTxs);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight">Monthly reports</h1>
 
       <Card>
@@ -78,38 +79,61 @@ export default async function ReportsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No data yet.
-            </p>
+            <Empty className="p-8">
+              <EmptyDescription>No data yet.</EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead className="text-right">Invested</TableHead>
-                  <TableHead className="text-right">Sold proceeds</TableHead>
-                  <TableHead className="text-right">Dividends</TableHead>
-                  <TableHead className="text-right">Fees</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.month}>
-                    <TableCell className="font-medium">{r.month}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(r.invested)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.soldProceeds ? money(r.soldProceeds) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {r.dividends ? money(r.dividends) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {r.fees ? money(r.fees) : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead className="text-right">Invested</TableHead>
+                      <TableHead className="text-right">Sold proceeds</TableHead>
+                      <TableHead className="text-right">Dividends</TableHead>
+                      <TableHead className="text-right">Fees</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r) => (
+                      <TableRow key={r.month}>
+                        <TableCell className="font-medium">{r.month}</TableCell>
+                        <TableCell className="text-right tabular-nums">{money(r.invested)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.soldProceeds ? money(r.soldProceeds) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {r.dividends ? money(r.dividends) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {r.fees ? money(r.fees) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="md:hidden">
+                <div className="divide-y">
+                  {rows.map((r) => (
+                    <div key={r.month} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
+                      <span className="font-medium">{r.month}</span>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        <span className="text-muted-foreground">Invested</span>
+                        <span className="tabular-nums text-right">{money(r.invested)}</span>
+                        <span className="text-muted-foreground">Sold proceeds</span>
+                        <span className="tabular-nums text-right">{r.soldProceeds ? money(r.soldProceeds) : "—"}</span>
+                        <span className="text-muted-foreground">Dividends</span>
+                        <span className="tabular-nums text-right">{r.dividends ? money(r.dividends) : "—"}</span>
+                        <span className="text-muted-foreground">Fees</span>
+                        <span className="tabular-nums text-right">{r.fees ? money(r.fees) : "—"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

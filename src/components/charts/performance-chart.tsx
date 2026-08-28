@@ -6,11 +6,20 @@ import {
   AreaChart,
   CartesianGrid,
   Line,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import { Checkbox } from "@/components/ui/checkbox";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
+import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 type Point = { day: string; pct: number };
 
@@ -45,6 +54,11 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
       : null,
   }));
 
+  const config: ChartConfig = {
+    portfolio: { label: baseLabel, color: "var(--chart-2)" },
+    benchmark: { label: "S&P 500", color: "var(--muted-foreground)" },
+  };
+
   const ranges = [
     [30, "1M"],
     [90, "3M"],
@@ -53,40 +67,39 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
   ] as const;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1">
+        <ToggleGroup
+          variant="outline"
+          size="sm"
+          spacing={0}
+          value={[String(days)]}
+          onValueChange={(v) => v[0] && setDays(Number(v[0]))}
+        >
           {ranges.map(([d, label]) => (
-            <button
-              key={d}
-              onClick={() => setDays(d)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                days === d
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent"
-              }`}
-            >
+            <ToggleGroupItem key={d} value={String(d)}>
               {label}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
+        </ToggleGroup>
+        <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Checkbox
             checked={showBenchmark}
-            onChange={(e) => setShowBenchmark(e.target.checked)}
-            className="accent-primary"
+            onCheckedChange={(c) => setShowBenchmark(c)}
+            aria-label="Show S&P 500 benchmark"
           />
           vs S&amp;P 500
-        </label>
+        </Label>
       </div>
       <div className="h-[280px]">
         {merged.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Not enough history yet — add transactions or wait for snapshots
-          </div>
+          <Empty className="h-full justify-center">
+            <EmptyDescription>
+              Not enough history yet — add transactions or wait for snapshots
+            </EmptyDescription>
+          </Empty>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={config} className="aspect-auto h-full w-full">
             <AreaChart data={merged} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="pf" x1="0" y1="0" x2="0" y2="1">
@@ -110,19 +123,29 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
                 tickFormatter={(v: number) => `${v}%`}
                 width={50}
               />
-              <Tooltip
-                formatter={(value, name) => [
-                  value == null
-                    ? "—"
-                    : `${Number(value) > 0 ? "+" : ""}${Number(value).toFixed(2)}%`,
-                  String(name) === "portfolio" ? baseLabel : "S&P 500",
-                ]}
-                labelFormatter={(label) => `Day ${String(label)}`}
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(l) => String(l)}
+                    formatter={(value, name) => (
+                      <>
+                        <span className="text-muted-foreground">
+                          {String(name) === "portfolio" ? baseLabel : "S&P 500"}
+                        </span>
+                        <span className="font-mono font-medium tabular-nums">
+                          {value == null
+                            ? "—"
+                            : `${Number(value) > 0 ? "+" : ""}${Number(value).toFixed(2)}%`}
+                        </span>
+                      </>
+                    )}
+                  />
+                }
               />
               <Area
                 type="monotone"
                 dataKey="portfolio"
-                stroke="var(--chart-2)"
+                stroke="var(--color-portfolio)"
                 fill="url(#pf)"
                 strokeWidth={2}
                 connectNulls
@@ -131,13 +154,13 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
                 <Line
                   type="monotone"
                   dataKey="benchmark"
-                  stroke="var(--muted-foreground)"
+                  stroke="var(--color-benchmark)"
                   strokeDasharray="4 4"
                   dot={false}
                 />
               )}
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         )}
       </div>
     </div>

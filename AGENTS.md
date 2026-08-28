@@ -59,16 +59,20 @@ Follow this order; copy an existing feature as your template:
 
 ## UI rules
 
-- Use the vendored shadcn/ui primitives in `src/components/ui/` as-is. Do not restyle them ad hoc; do not add a component library.
+- **Prefer shadcn/ui; never hand-roll custom UI.** Compose from the vendored primitives in `src/components/ui/` (Base UI, style `base-rhea`). Do not write bespoke buttons, empty states, checkboxes, toggles, charts, form layouts, or sidebar markup when a shadcn primitive covers it.
+- Add any missing primitive with the project runner: `pnpm dlx shadcn@latest add <component>` (e.g. `empty`, `checkbox`, `toggle-group`, `chart`, `field`, `sidebar`). It writes Base UI-consistent files into `src/components/ui/`. Before writing a styled `div`, check whether a shadcn component already exists.
+- Right component for the job: `Empty` for empty states, `Checkbox` for booleans, `ToggleGroup` for 2–8 static options, `Chart` (wraps Recharts) for charts, `Field`/`FieldGroup` for labelled form controls, `Sidebar` for app navigation, `Card` for panels, `Table` for tabular data, `Badge` for status, `Separator` for dividers.
+- Composing layouts is fine, but compose **from** shadcn primitives — don't restyle them ad hoc and don't introduce a second component library.
 - Design tokens (colors incl. semantic `success`/`warning`, chart palette, radius) live in `src/app/globals.css` under `@theme`. Reference tokens (`bg-background`, `text-muted-foreground`, …), never raw hex.
 - Dark mode is class-based (`next-themes`) and must work for every screen you touch.
-- P/L values render through `<PL>` / `<PLPct>` so green/red semantics stay consistent.
+- P/L values render through `<PL>` / `<PLPct>` so green/red semantics stay consistent — the one deliberate custom component, mandated by design.
 - Full visual spec: `design.md`.
 
 ## Conventions
 
 - Files: components PascalCase, everything else kebab/camelCase per existing layout. Colocate feature components under `src/components/features/<feature>/`.
 - Server vs client: default to server components; add `"use client"` only where interactivity requires it (forms, charts, dialogs).
+- Prefer composing shadcn primitives over custom markup. If a hand-rolled `div` starts to look like a button/table/empty state/form row, swap it for the corresponding shadcn component.
 - Error style: actions return `{ ok?: true } | { error: string }` — no thrown errors across the action boundary; toast them client-side.
 - Comments only for non-obvious decisions; keep the `ponytail:` convention for deliberate simplifications (grep it before "improving" those spots).
 - No secrets in code. `.env` is gitignored; `.env.example` documents every variable.

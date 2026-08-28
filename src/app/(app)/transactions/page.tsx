@@ -1,12 +1,14 @@
 import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
 import { DeleteButton } from "@/components/features/delete-button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -33,13 +35,11 @@ export default async function TransactionsPage() {
   const ledger = [...txs].reverse();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
-        <div className="flex gap-2">
-          <a href="/api/export" download>
-            <Badge variant="outline">Export CSV</Badge>
-          </a>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" nativeButton={false} render={<a href="/api/export" download>Export CSV</a>} />
           <AddTransactionDialog portfolios={portfolios} />
         </div>
       </div>
@@ -50,59 +50,108 @@ export default async function TransactionsPage() {
         </CardHeader>
         <CardContent>
           {ledger.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No transactions yet.
-            </p>
+            <Empty className="p-8">
+              <EmptyDescription>No transactions yet.</EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Portfolio</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead className="text-right">Qty / Amount</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Fee</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Portfolio</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Symbol</TableHead>
+                      <TableHead className="text-right">Qty / Amount</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Fee</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ledger.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>{fmtDate(tx.occurredAt)}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {nameById.get(tx.portfolioId) ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                            }
+                            className="capitalize"
+                          >
+                            {tx.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {tx.type === "dividend"
+                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
+                            : fmtQty(parseFloat(tx.quantity))}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {parseFloat(tx.fee) ? fmtMoney(parseFloat(tx.fee), tx.asset.currency) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex flex-col gap-2 md:hidden">
                 {ledger.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>{fmtDate(tx.occurredAt)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {nameById.get(tx.portfolioId) ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
-                        }
-                        className="capitalize"
-                      >
-                        {tx.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {tx.type === "dividend"
-                        ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                        : fmtQty(parseFloat(tx.quantity))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {parseFloat(tx.fee) ? fmtMoney(parseFloat(tx.fee), tx.asset.currency) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
-                    </TableCell>
-                  </TableRow>
+                  <Card key={tx.id}>
+                    <CardContent className="flex flex-col gap-1.5 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                            }
+                            className="capitalize"
+                          >
+                            {tx.type}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
+                        </div>
+                        <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                      </div>
+                      <div>
+                        <span className="font-medium">{tx.asset.symbol}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {" "}
+                          · {nameById.get(tx.portfolioId) ?? "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="tabular-nums">
+                          {tx.type === "dividend"
+                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
+                            : fmtQty(parseFloat(tx.quantity))}
+                          {tx.type !== "dividend" && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {parseFloat(tx.fee) ? `Fee ${fmtMoney(parseFloat(tx.fee), tx.asset.currency)}` : ""}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

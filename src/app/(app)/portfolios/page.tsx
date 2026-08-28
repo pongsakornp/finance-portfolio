@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AddPortfolioDialog } from "@/components/features/add-portfolio-dialog";
 import { DeleteButton } from "@/components/features/delete-button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { deletePortfolioAction } from "@/actions/portfolio.actions";
 import { getUserPortfolios, getUserTransactions } from "@/lib/services/view-service";
 import { requireUserId } from "@/lib/session";
@@ -26,18 +27,18 @@ export default async function PortfoliosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Portfolios</h1>
         <AddPortfolioDialog />
       </div>
 
       {portfolios.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center text-sm text-muted-foreground">
+        <Empty className="p-12">
+          <EmptyDescription>
             No portfolios yet — create one to start tracking.
-          </CardContent>
-        </Card>
+          </EmptyDescription>
+        </Empty>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {portfolios.map((p) => {
@@ -52,7 +53,7 @@ export default async function PortfoliosPage() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-medium">{p.name}</h2>
-                    <div className="relative z-20 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <div className="relative z-20 opacity-100 transition-opacity md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">
                       <DeleteButton
                         action={deletePortfolioAction.bind(null, p.id)}
                         confirmText={`Delete "${p.name}" and all its transactions?`}

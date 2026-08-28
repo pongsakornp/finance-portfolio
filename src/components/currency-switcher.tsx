@@ -21,6 +21,7 @@ export function CurrencySwitcher({ value }: { value: string }) {
       defaultValue={value}
       disabled={pending}
       onValueChange={(baseCurrency) => {
+        if (!baseCurrency) return;
         const fd = new FormData();
         fd.set("baseCurrency", baseCurrency);
         startTransition(async () => {
@@ -29,7 +30,7 @@ export function CurrencySwitcher({ value }: { value: string }) {
         });
       }}
     >
-      <SelectTrigger className="w-[72px]" aria-label="Display currency">
+      <SelectTrigger className="w-20" aria-label="Display currency">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

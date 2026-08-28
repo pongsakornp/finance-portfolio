@@ -14,6 +14,7 @@ import { fmtMoney, fmtQty } from "@/lib/utils/money";
 import { AllocationDonut } from "@/components/charts/allocation-donut";
 import { PerformanceChart } from "@/components/charts/performance-chart";
 import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
+import { HoldingsMobileList } from "@/components/features/holdings-mobile-list";
 import { PL, PLPct } from "@/components/pl";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Empty, EmptyDescription } from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -70,7 +72,7 @@ export default async function DashboardPage() {
   const holdings = view.rows.filter((r) => r.position.qty > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <AddTransactionDialog portfolios={portfolios} />
@@ -105,7 +107,7 @@ export default async function DashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription>Unrealized P/L</CardDescription>
             <CardTitle className="text-2xl">
-              <PL value={t.unrealizedPL * rate} />
+              <PL value={t.unrealizedPL * rate} currency={baseCurrency} />
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm">
@@ -118,6 +120,7 @@ export default async function DashboardPage() {
             <CardTitle className="text-2xl">
               <PL
                 value={(t.realizedPL + t.dividendsReceived) * rate}
+                currency={baseCurrency}
               />
             </CardTitle>
           </CardHeader>
@@ -154,55 +157,75 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent>
           {holdings.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No open positions yet — add your first transaction.
-            </p>
+            <Empty className="p-8">
+              <EmptyDescription>
+                No open positions yet — add your first transaction.
+              </EmptyDescription>
+            </Empty>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Avg cost</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead className="text-right">Unrealized P/L</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {holdings.map((h) => (
-                  <TableRow key={h.asset.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{h.asset.symbol}</span>
-                        <Badge variant="outline" className="capitalize">
-                          {h.asset.type}
-                        </Badge>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">{h.asset.name}</p>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtQty(h.position.qty)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtMoney(h.position.avgCost, h.asset.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {fmtMoney(h.price, h.asset.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {money(h.valueUsd)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div>
-                        <PL value={h.position.unrealizedPL * rate} />
-                      </div>
-                      <PLPct value={h.position.unrealizedPLPct} className="text-xs" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asset</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Avg cost</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                      <TableHead className="text-right">Unrealized P/L</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {holdings.map((h) => (
+                      <TableRow key={h.asset.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{h.asset.symbol}</span>
+                            <Badge variant="outline" className="capitalize">
+                              {h.asset.type}
+                            </Badge>
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">{h.asset.name}</p>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtQty(h.position.qty)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(h.position.avgCost, h.asset.currency)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(h.price, h.asset.currency)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {money(h.valueUsd)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div>
+                            <PL value={h.position.unrealizedPL * rate} />
+                          </div>
+                          <PLPct value={h.position.unrealizedPLPct} className="text-xs" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <HoldingsMobileList
+                items={holdings.map((h) => ({
+                  key: h.asset.id,
+                  symbol: h.asset.symbol,
+                  name: h.asset.name,
+                  type: h.asset.type,
+                  qty: fmtQty(h.position.qty),
+                  avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
+                  price: fmtMoney(h.price, h.asset.currency),
+                  value: money(h.valueUsd),
+                  pl: h.position.unrealizedPL * rate,
+                  plPct: h.position.unrealizedPLPct,
+                }))}
+              />
+            </>
           )}
         </CardContent>
       </Card>

@@ -1,120 +1,26 @@
-# design.md — Architecture & UI Design System
+# DESIGN.md — UI/UX Design Language
 
-Companion to [`AGENTS.md`](./AGENTS.md) (operational rules). This document explains *why* the system looks the way it does and specifies the visual language.
+Companion to [`AGENTS.md`](./AGENTS.md) (operational & architecture rules). This document specifies the visual language: the vibe, the tokens, the layout, and the components. It does not describe data flow, the ERD, or deployment — those live in AGENTS.md.
 
 ---
 
-## 1. Product
+## 1. Design vibe
 
-Multi-user financial portfolio tracker for **stocks, ETFs and crypto** with USD/THB display. Users record transactions (buy/sell/dividend) against portfolios; the app computes holdings, P/L, allocation and performance from that ledger and enriches it with live/historical market data.
-
-### Core domain concepts
-
-| Concept | Meaning |
-|---|---|
-| Portfolio | Named container of transactions owned by one user |
-| Asset | Shared, global: `symbol` + `type` (stock/etf/crypto) + native `currency`; crypto also carries CoinGecko `external_id` |
-| Transaction | Immutable ledger row: buy / sell / dividend; dividends store the cash amount in `quantity` |
-| Position | **Computed** at read time via average-cost method — never persisted |
-| Snapshot | Nightly USD value/cost per portfolio (`snapshots`) for long-range charts |
-
-### Money & P/L formulas (authoritative)
-
-```
-buy    : qty += q            cost += q·price + fee
-sell   : avg  = cost / qty   realized += (price − avg)·q_sold − fee
-         cost −= avg·q_sold  qty   −= q_sold        (oversell ignored)
-dividend : dividends += quantity (cash)
-position: unrealized = qty·currentPrice − cost
-totals  : summed per asset after conversion to USD
-day change: Σ qty·(currentPrice − previousClose) where prev close exists
-```
-
-Reference implementation + tests: `src/lib/services/holdings-service.ts`, `tests/holdings-service.test.ts`.
-
-### Currency model
-
-- Every amount lives natively in the asset's currency (e.g. `PTT.BK` → THB).
-- Services normalize to **USD** internally; the display layer converts once to the user's `baseCurrency` (USD or THB) using a cached daily rate.
-- ponytail simplification: historical series use today's FX rate (see `valuation-service.ts`). Upgrade path: historical fx table.
-
-## 2. External data
-
-| Source | Used for | Endpoint | Notes |
-|---|---|---|---|
-| Yahoo Finance chart API | stocks/ETF quotes + history incl. `.BK`, benchmark `^GSPC` | `query1.finance.yahoo.com/v8/finance/chart/{sym}` | unofficial; requires UA header; may rate-limit |
-| CoinGecko free API | crypto price + 365 d history | `api.coingecko.com/api/v3/simple/price`, `/market_chart` | ~10-30 req/min |
-| open.er-api.com | FX (USD↔THB etc.) | `/v6/latest/{base}` | daily rates |
-
-**Caching contract** (`price_cache`, `fx_rates`, `price_history` tables):
-
-- Quote TTL: stock/ETF **5 min**, crypto **60 s**; on upstream failure serve stale value; hard-fail only if no cache exists.
-- FX TTL: **12 h**.
-- History backfill: refresh when newest stored day is >3 days old; upsert idempotent.
-
-All external traffic is confined to `quote-service.ts`, `fx-service.ts`, `valuation-service.ts`.
-
-## 3. Data model (ERD)
-
-```mermaid
-erDiagram
-    users ||--o{ portfolios : owns
-    users ||--o{ alerts : configures
-    portfolios ||--o{ transactions : contains
-    portfolios ||--o{ snapshots : daily
-    assets ||--o{ transactions : referenced
-    assets ||--|| price_cache : "1:1 quote"
-    assets ||--o{ price_history : daily closes
-    assets ||--o{ alerts : target
-
-    users { uuid id PK  text email UK  text password_hash  text base_currency }
-    portfolios { uuid id PK  uuid user_id FK  text name }
-    assets { uuid id PK  text symbol  enum type  text currency  text external_id }
-    transactions { uuid id PK  uuid portfolio_id FK  uuid asset_id FK  enum type  numeric quantity 20_8  numeric price 20_8  numeric fee  timestamptz occurred_at }
-    snapshots { uuid id PK  uuid portfolio_id FK  date day  numeric value_usd  numeric cost_usd }
-    alerts { uuid id PK  uuid user_id FK  uuid asset_id FK  enum direction  numeric threshold  bool active  timestamptz triggered_at }
-```
-
-Key indexes: `transactions(portfolio_id, occurred_at)`, `assets(symbol,type)` unique, `snapshots(portfolio_id, day)` unique.
-
-## 4. Request flow
-
-```
-Browser ── RSC page ──► view-service ──► holdings-service (pure math)
-                            │                ▲
-                            └─► quote/fx services ──► price_cache/fx_rates tables
-                                                        │ miss+stale
-                                                        ▼
-                                              Yahoo / CoinGecko / er-api
-
-Mutation: form ──► server action (zod validate → ownership check → db write
-                        → revalidatePath) ──► toast result client-side
-Background: node-cron (instrumentation.ts): nightly snapshots, hourly alert eval
-```
-
-## 5. Deployment topology (Dokploy)
-
-```
-Dokploy project
-├── service "db"   postgres:16-alpine, volume pgdata, pg_isready healthcheck
-└── service "app"  built from Dockerfile (multi-stage, standalone output, non-root)
-      entrypoint: scripts/migrate.mjs → node server.js
-      healthcheck: GET /api/health
-      env: POSTGRES_PASSWORD, AUTH_SECRET, CRON_ENABLED(optional)
-```
-
-Rollback = redeploy previous git SHA; DB migrations are forward-only additive.
-
-## 6. UI design system
+A calm, terminal-adjacent finance tool. It should feel like a well-made private spreadsheet: dense, accurate, quietly confident. No marketing chrome, no surface-level "fintech dashboard" clichés. The interface gets out of the way of the numbers.
 
 ### Principles
 
-1. **Data first**: dense tabular data, generous numbers typography, zero decorative chrome.
-2. **Semantic color only**: green/red are reserved exclusively for gain/loss via `<PL>`/`<PLPct>`.
-3. **Server-rendered by default**: interactivity limited to forms, dialogs, charts, theme toggle.
-4. Dark mode is a first-class requirement — every screen must be checked in both themes.
+1. **Numbers are the product.** Dense tabular data, generous number typography, zero decorative chrome. Every pixel either carries data or organizes it.
+2. **Semantic color only.** Green/red are reserved *exclusively* for gain/loss, and always rendered through `<PL>` / `<PLPct>`. If a color appears, it means something.
+3. **Server-rendered by default.** Interactivity is limited to forms, dialogs, charts, and the theme toggle.
+4. **Dark mode is first-class.** Every screen is authored in both themes, never bolted on.
+5. **Quiet motion.** Transitions are short and subtle, present only to orient, never to show off.
 
-### Tokens (defined in `src/app/globals.css`)
+### Tone of voice
+
+Muted, plain-English labels. "Add transaction", "Imported 12 rows", "No open positions yet". Avoid dramatic language, jargon, or financial-guru phrasing. Prices are informational, not motivational.
+
+## 2. Tokens (defined in `src/app/globals.css`)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -125,19 +31,19 @@ Rollback = redeploy previous git SHA; DB migrations are forward-only additive.
 | `success` | oklch(0.62 0.17 149) | lighter variant | gains only |
 | `destructive` | red | brighter red | losses, destructive actions |
 | `warning` | amber | amber | sells, triggered-alerts |
-| `chart-1..5` | palette | palette | donut + line series |
+| `chart-1..5` | grayscale ramp | grayscale ramp | donut + line series |
 | `radius` | 0.625rem | same | all corners |
 
 Never hardcode hex; reference semantic classes (`bg-card`, `text-success`, …).
 
-### Typography & spacing
+## 3. Typography & spacing
 
-- Font: Geist Sans (UI) / Geist Mono available for code-ish values.
+- Font: Inter (UI, via next/font `--font-sans`); Geist Mono for code-ish / monotone numerics where it aids alignment.
 - Page title: `text-2xl font-semibold tracking-tight`. Card titles: `text-base`. Labels/meta: `text-xs/text-sm text-muted-foreground`.
-- All numerics in tables/stat cards: `tabular-nums`.
-- Spacing on a 4px grid; page container `max-w-6xl mx-auto p-4 md:p-6`; card grid gap-4.
+- All numerics in tables/stat cards use `tabular-nums` so columns align and digits don't wiggle.
+- Spacing on a 4px grid; page container `max-w-6xl mx-auto p-4 md:p-6`; card grid `gap-4`.
 
-### Layout anatomy
+## 4. Layout anatomy
 
 ```
 ┌ sidebar 224px (md+) ┐┌ header 56px: [mobile menu] …… [currency switch][theme][sign out]
@@ -149,29 +55,32 @@ Never hardcode hex; reference semantic classes (`bg-card`, `text-success`, …).
                            data table(s) in cards
 ```
 
-Mobile: sidebar collapses into a left Sheet; stat cards stack 2-up; tables scroll horizontally inside their card.
+Mobile: sidebar collapses into a left Sheet; stat cards stack 2-up; data tables become stacked card-lists below `md` (desktop tables stay `md:`).
 
-### Component inventory (all in `src/components/`)
+## 5. Component inventory (all in `src/components/`)
 
-- `ui/*` — vendored shadcn primitives (button, card, input, label, select, table, dialog, sheet, dropdown-menu, tabs, badge, separator, skeleton, textarea, sonner). Do not modify; compose instead.
-- `pl.tsx` — `<PL>` signed colored amount, `<PLPct>` percent. **Every** gain/loss renders through these.
-- `charts/allocation-donut` — Recharts donut by asset class.
-- `charts/performance-chart` — area (portfolio % change) + dashed S&P 500 line, range tabs 1M/3M/6M/1Y, benchmark toggle.
-- `features/add-transaction-dialog` — portfolio select, action select (buy/sell/dividend), asset class, symbol (+CoinGecko ID for crypto), qty/price/fee/date. Dividend mode hides price/fee and relabels quantity as cash amount.
+**Rule: compose from shadcn/ui; never hand-roll custom UI.** Add primitives with `pnpm dlx shadcn@latest add <component>`; use the right one for the job.
+
+- `ui/*` — vendored shadcn primitives, Base UI, style `base-rhea`: button, card, input, label, select, table, dialog, sheet, dropdown-menu, tabs, badge, separator, skeleton, textarea, sonner, **empty, checkbox, toggle-group, chart, field, sidebar, tooltip**. Compose from these; don't restyle ad hoc.
+- `pl.tsx` — `<PL>` signed colored amount, `<PLPct>` percent. **Every** gain/loss renders through these (the one deliberate custom component).
+- `charts/allocation-donut` — shadcn `Chart` donut by asset class (wraps Recharts).
+- `charts/performance-chart` — shadcn `Chart` area (portfolio % change) + dashed S&P 500 line, `ToggleGroup` range 1M/3M/6M/1Y, `Checkbox` benchmark toggle.
+- `features/add-transaction-dialog` — `Field`/`FieldGroup` form: portfolio select, action select (buy/sell/dividend), asset class, symbol (+CoinGecko ID for crypto), qty/price/fee/date. Dividend mode hides price/fee and relabels quantity as cash amount.
 - `features/import-client` — CSV upload → parse preview (first 20 rows) → target portfolio → import; template download link.
 - `features/delete-button`, `toggle-alert-button` — icon buttons wired to bound server actions with confirm + toast.
 - `currency-switcher` — global USD/THB display toggle (persists to user profile).
+- `sidebar-nav` + app `Sidebar` — shadcn `Sidebar` (desktop rail + mobile sheet via `SidebarTrigger`).
 
-### States every screen must define
+## 6. States every screen must define
 
 | State | Treatment |
 |---|---|
-| Empty | Centered muted sentence inside the table card ("No open positions yet — add your first transaction.") |
+| Empty | shadcn `Empty` + `EmptyDescription` inside the card ("No open positions yet — add your first transaction.") |
 | Loading (charts) | Inline "Loading chart…" text block (server pages render data directly) |
 | Error (quotes) | Stale cached price served silently; missing quote → em-dash cells, never a crash |
 | Triggered alert | Amber `Triggered <date>` badge; pause/re-arm icons in row actions |
 
-### Wireframes (reference screens)
+## 7. Wireframes (reference screens)
 
 Dashboard:
 ```
@@ -189,8 +98,6 @@ Dashboard                                    [+ Add transaction]
 Transactions ledger columns: Date · Portfolio · Action(badge) · Symbol · Qty/Amount · Price · Fee · ␥delete.
 Alerts columns: Asset · Condition · Current · Status badge · ␦pause/delete.
 
-## 7. Testing strategy
+## 8. Manual smoke checklist (visual)
 
-- Pure money logic (`holdings-service`, `report-service`, utils) unit-tested in `tests/` — no DB mocks, fast.
-- Integration/E2E deliberately omitted v1 (single maintainer app); add Playwright if the team grows.
-- Manual smoke checklist before release: register→create portfolio→add buy/sell/dividend→dashboard math sanity→CSV round-trip→THB switch→dark mode→mobile layout.
+Before release: register→create portfolio→add buy/sell/dividend→dashboard math sanity→CSV round-trip→THB switch→dark mode→mobile layout.

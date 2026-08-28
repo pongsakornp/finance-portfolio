@@ -20,7 +20,7 @@ Demo login after seeding: `demo@finance.local` / `demo1234`.
 ## Docs
 
 - [`AGENTS.md`](./AGENTS.md) — architecture rules & conventions (start here)
-- [`design.md`](./design.md) — product spec, ERD, formulas, UI design system, deploy topology
+- [`DESIGN.md`](./design.md) — product spec, ERD, formulas, UI design system, deploy topology
 
 ## Deploy (Dokploy)
 
