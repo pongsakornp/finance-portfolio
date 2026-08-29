@@ -10,6 +10,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { fmtMoney } from "@/lib/utils/money";
 
 const CHART_COLORS = [
   "var(--chart-1)",
@@ -21,8 +22,10 @@ const CHART_COLORS = [
 
 export function AllocationDonut({
   data,
+  currency = "USD",
 }: {
   data: Array<{ label: string; value: number }>;
+  currency?: string;
 }) {
   if (data.length === 0) {
     return (
@@ -56,7 +59,24 @@ export function AllocationDonut({
             <Cell key={d.id} fill={`var(--color-${d.id})`} />
           ))}
         </Pie>
-        <ChartTooltip content={<ChartTooltipContent nameKey="id" hideLabel />} />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              nameKey="id"
+              hideLabel
+              formatter={(value, _name, item) => (
+                <>
+                  <span className="text-muted-foreground">
+                    {item?.payload?.label ?? "—"}
+                  </span>
+                  <span className="font-mono font-medium text-foreground tabular-nums">
+                    {fmtMoney(Number(value), currency)}
+                  </span>
+                </>
+              )}
+            />
+          }
+        />
         <ChartLegend content={<ChartLegendContent nameKey="id" />} />
       </PieChart>
     </ChartContainer>

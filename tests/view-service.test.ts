@@ -105,5 +105,7 @@ describe("buildHoldingsView", () => {
     expect(view.rows).toHaveLength(2);
     // Cost basis should be 0.30 USD + 10 USD = 10.30 USD (not 10 THB + 10 USD = 20)
     expect(view.totalsUsd.costBasis).toBe(10.3);
+    // Day change must be in USD too: THB (35-34)*1*0.03 = 0.03 + USD (150-148)*1 = 2.00
+    expect(view.totalsUsd.dayChange).toBeCloseTo(2.03, 2);
   });
 });

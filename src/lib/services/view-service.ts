@@ -130,6 +130,7 @@ export async function buildHoldingsView(txs: TxRow[]): Promise<HoldingsView> {
       return {
         position: {
           ...r.position,
+          currentPrice: r.position.currentPrice * rate,
           costBasis: r.costUsd,
           marketValue: r.valueUsd,
           unrealizedPL: Math.round((r.valueUsd - r.costUsd) * 100) / 100,
