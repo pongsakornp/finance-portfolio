@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
-import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
-import { HoldingsMobileList } from "@/components/features/holdings-mobile-list";
+import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
+import { CompactMoney } from "@/components/features/compact-money";
+import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,14 +23,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { deleteTransactionAction } from "@/actions/transaction.actions";
+import { deletePortfolioAction } from "@/actions/portfolio.actions";
 import { db } from "@/lib/db";
 import { portfolios, users } from "@/lib/db/schema";
 import {
   buildHoldingsView,
   getUserTransactions,
 } from "@/lib/services/view-service";
+import { baseRate } from "@/lib/services/fx-service";
 import { requireUserId } from "@/lib/session";
-import { fmtDate } from "@/lib/utils/date";
+import { fmtDate, fmtMonthYear } from "@/lib/utils/date";
+import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
 import { fmtMoney, fmtQty } from "@/lib/utils/money";
 
 export const dynamic = "force-dynamic";
@@ -53,12 +56,18 @@ export default async function PortfolioDetailPage({
 
   const [txs, [user]] = await Promise.all([
     getUserTransactions(userId, id),
-    db.select({ baseCurrency: users.baseCurrency }).from(users).where(eq(users.id, userId)),
+    db
+      .select({ baseCurrency: users.baseCurrency, plView: users.plView })
+      .from(users)
+      .where(eq(users.id, userId)),
   ]);
   const baseCurrency = user?.baseCurrency ?? "USD";
+  const plView = user?.plView ?? "unrealized";
 
   const view = await buildHoldingsView(txs);
   const t = view.totalsUsd;
+  const rate = await baseRate(baseCurrency);
+  const money = (usd: number) => fmtMoney(Math.round(usd * rate * 100) / 100, baseCurrency);
   const holdings = [...view.rows].filter((r) => r.position.qty > 0);
   const ledger = [...txs].reverse();
 
@@ -66,29 +75,37 @@ export default async function PortfolioDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <Link href="/portfolios" className="text-xs text-muted-foreground hover:underline">
-            ← Portfolios
-          </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{row.name}</h1>
         </div>
-        <AddTransactionDialog portfolios={[{ id, name: row.name }]} defaultPortfolioId={id} />
+        <div className="flex items-center gap-2">
+          <DeleteButton
+            action={deletePortfolioAction.bind(null, id)}
+            confirmText={`Delete "${row.name}" and all its transactions?`}
+            redirectTo="/portfolios"
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat title="Total value" value={fmtMoney(t.marketValue, baseCurrency)} />
-        <Stat title="Cost basis" value={fmtMoney(t.costBasis, baseCurrency)} />
-        <Stat
-          title="Unrealized P/L"
-          node={
-            <>
-              <PL value={t.unrealizedPL} currency={baseCurrency} /> (<PLPct value={t.unrealizedPLPct} />)
-            </>
-          }
+        <StatCard
+          label="Total value"
+          title={<CompactMoney value={t.marketValue * rate} currency={baseCurrency} />}
+          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} />}
         />
-        <Stat
-          title="Realized P/L"
-          node={<PL value={t.realizedPL} currency={baseCurrency} />}
-          sub={`Dividends ${fmtMoney(t.dividendsReceived, baseCurrency)}`}
+        <StatCard
+          label="Cost basis"
+          title={<CompactMoney value={t.costBasis * rate} currency={baseCurrency} />}
+        />
+        <StatCard
+          label="Unrealized P/L"
+          title={<PL value={t.unrealizedPL * rate} currency={baseCurrency} compact />}
+          footer={<PLPct value={t.unrealizedPLPct} />}
+          footerClassName="text-sm"
+        />
+        <StatCard
+          label="Realized + Dividends"
+          title={<PL value={(t.realizedPL + t.dividendsReceived) * rate} currency={baseCurrency} compact />}
+          footer={`Dividends ${money(t.dividendsReceived)}`}
         />
       </div>
 
@@ -102,62 +119,27 @@ export default async function PortfolioDetailPage({
               <EmptyDescription>No open positions.</EmptyDescription>
             </Empty>
           ) : (
-            <>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Asset</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Avg cost</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right">P/L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {holdings.map((h) => (
-                      <TableRow key={h.asset.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{h.asset.symbol}</span>
-                            <Badge variant="outline" className="capitalize">{h.asset.type}</Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{fmtQty(h.position.qty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(h.position.avgCost, h.asset.currency)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(h.price, h.asset.currency)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(h.valueUsd, baseCurrency)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <PL value={h.position.unrealizedPL} />
-                          <PLPct value={h.position.unrealizedPLPct} className="ml-1 text-xs" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <HoldingsMobileList
-                items={holdings.map((h) => ({
-                  key: h.asset.id,
+            <HoldingsList
+              items={holdings.map((h) => {
+                const rowPl = holdingPl(h, rate, plView);
+                return {
+                  id: h.asset.id,
                   symbol: h.asset.symbol,
-                  name: "",
+                  name: h.asset.name,
                   type: h.asset.type,
+                  typeLabel: typeLabel(h.asset.type),
                   qty: fmtQty(h.position.qty),
+                  qtyLabel: typeUnitLabel(h.asset.type),
                   avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
                   price: fmtMoney(h.price, h.asset.currency),
-                  value: fmtMoney(h.valueUsd, baseCurrency),
-                  pl: h.position.unrealizedPL,
-                  plPct: h.position.unrealizedPLPct,
-                }))}
-              />
-            </>
+                  valueNum: Math.round(h.valueUsd * rate * 100) / 100,
+                  valueCurrency: baseCurrency,
+                  pl: rowPl.pl,
+                  plPct: rowPl.plPct,
+                  firstBuyLabel: fmtMonthYear(h.firstBuyAt),
+                };
+              })}
+            />
           )}
         </CardContent>
       </Card>
@@ -258,27 +240,5 @@ export default async function PortfolioDetailPage({
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function Stat({
-  title,
-  value,
-  node,
-  sub,
-}: {
-  title: string;
-  value?: string;
-  node?: React.ReactNode;
-  sub?: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className="text-2xl font-semibold tabular-nums">{value ?? node}</div>
-      </CardHeader>
-      {sub && <CardContent className="text-sm text-muted-foreground">{sub}</CardContent>}
-    </Card>
   );
 }

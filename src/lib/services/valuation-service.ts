@@ -1,10 +1,12 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { priceHistory } from "@/lib/db/schema";
+import { assets, benchmarkCache, priceHistory } from "@/lib/db/schema";
 import type { Asset } from "@/lib/services/quote-service";
-import { getRate } from "@/lib/services/fx-service";
+import { getRate, loadFxHistory } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
+
+const HISTORY_YEARS = 5;
 
 export type SeriesPoint = { day: string; value: number };
 
@@ -18,11 +20,17 @@ type YahooHistory = {
 };
 
 async function yahooHistory(symbol: string): Promise<Map<string, number>> {
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`,
-    { headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" }, cache: "no-store" }
+  return yahooChart(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${HISTORY_YEARS}y`
   );
-  if (!res.ok) throw new Error(`Yahoo history ${symbol}: HTTP ${res.status}`);
+}
+
+async function yahooChart(url: string): Promise<Map<string, number>> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Yahoo history: HTTP ${res.status}`);
   const json = (await res.json()) as YahooHistory;
   const r = json.chart.result?.[0];
   const out = new Map<string, number>();
@@ -35,7 +43,7 @@ async function yahooHistory(symbol: string): Promise<Map<string, number>> {
 
 async function coingeckoHistory(id: string): Promise<Map<string, number>> {
   const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=365&interval=daily`,
+    `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${HISTORY_YEARS * 365}&interval=daily`,
     { cache: "no-store" }
   );
   if (!res.ok) throw new Error(`CoinGecko history ${id}: HTTP ${res.status}`);
@@ -48,7 +56,7 @@ async function coingeckoHistory(id: string): Promise<Map<string, number>> {
 /** Thai mutual fund NAV history from Finnomena's public API. */
 async function finnomenaHistory(symbol: string): Promise<Map<string, number>> {
   const to = Math.floor(Date.now() / 1000) + 86400;
-  const from = to - 366 * 86400;
+  const from = to - (HISTORY_YEARS * 366 + 1) * 86400;
   const res = await fetch(
     `https://www.finnomena.com/fn3/api/fund/v2/public/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1D&from=${from}&to=${to}`,
     { cache: "no-store" }
@@ -91,15 +99,32 @@ async function ensureHistory(asset: Asset): Promise<void> {
       day,
       close: String(close),
     }));
-    // batch upsert, 500 rows/chunk keeps postgres parameter limits safe
+    // batch upsert, 500 rows/chunk keeps postgres parameter limits safe;
+    // overwrite so an official daily close replaces the live (source=2) row
     for (let i = 0; i < rows.length; i += 500) {
       await db
         .insert(priceHistory)
         .values(rows.slice(i, i + 500))
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: [priceHistory.assetId, priceHistory.day],
+          set: { close: rows[i].close, source: 1 },
+        });
     }
   } catch {
     // free API hiccup — series degrades gracefully below
+  }
+}
+
+/** Daily backfill of price history for every non-cash asset (cron). */
+export async function warmAssetHistory(): Promise<void> {
+  const all = await db.select({ asset: assets }).from(assets);
+  for (const { asset } of all) {
+    if (asset.type === "cash") continue;
+    try {
+      await ensureHistory(asset);
+    } catch {
+      // skip unhealthy assets; retried next run
+    }
   }
 }
 
@@ -127,8 +152,8 @@ export type TxWithAsset = {
 
 /**
  * Reconstructs the portfolio's daily USD value by walking transactions forward
- * through each asset's historical closes.
- * ponytail: uses TODAY'S fx rate for non-USD assets instead of per-day rates — fine for THB tracking; swap to historical fx table if precision matters later.
+ * through each asset's historical closes. Non-USD assets use per-day FX (falls
+ * back to today's rate for a missing day).
  */
 export async function portfolioSeries(
   txs: TxWithAsset[],
@@ -150,11 +175,15 @@ export async function portfolioSeries(
   );
 
   const usdRates = new Map<string, number>();
+  const nonUsd = new Set<string>();
   for (const cur of new Set(distinctAssets.map((a) => a.currency))) {
-    if (cur !== "USD") usdRates.set(cur, (await getRate(cur, "USD")).toNumber());
+    if (cur !== "USD") nonUsd.add(cur);
   }
-  const toUsd = (v: number, currency: string) =>
-    v * (currency === "USD" ? 1 : (usdRates.get(currency) ?? 1));
+  await Promise.all(
+    [...nonUsd].map(async (cur) => usdRates.set(cur, (await getRate(cur, "USD")).toNumber()))
+  );
+  // per-day FX so multi-currency historical valuation isn't pinned to today's rate
+  const fxByDay = await loadFxHistory([...nonUsd], fromDay);
 
   // chronological transaction buckets
   const txsAsc = [...txs].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
@@ -194,19 +223,88 @@ export async function portfolioSeries(
       if (close != null) lastClose.set(a.id, close);
       const lc = lastClose.get(a.id);
       const qty = holdings.get(a.id)?.qty ?? 0;
-      if (lc != null && qty > 0) value += qty * lc * toUsd(1, a.currency);
+      if (lc != null && qty > 0) {
+        const cur = a.currency;
+        const perDay = cur === "USD" ? 1 : fxByDay.get(cur)?.get(day) ?? usdRates.get(cur) ?? 1;
+        value += qty * lc * perDay;
+      }
     }
     points.push({ day, value: Math.round(value * 100) / 100 });
   }
 
-  return points.filter((p) => p.day >= windowStart);
+  // drop leading zero-value days (before the first position) so %-normalization
+  // has a sane base instead of collapsing to 1 and exploding the percentages
+  const firstNonZero = points.findIndex((p) => p.value > 0);
+  const series = firstNonZero === -1 ? [] : points.slice(firstNonZero);
+
+  return series.filter((p) => p.day >= windowStart);
+}
+
+const BENCHMARK_INDEX = "%5EGSPC";
+const BENCHMARK_TTL_MS = 24 * 60 * 60 * 1000; // index updates daily
+
+/** ^GSPC closes cached in benchmark_cache with a stale fallback + query2 retry. */
+async function loadBenchmark(windowStart: string): Promise<Map<string, number>> {
+  const cached = await db
+    .select()
+    .from(benchmarkCache)
+    .where(and(eq(benchmarkCache.index, BENCHMARK_INDEX), gte(benchmarkCache.day, windowStart)))
+    .orderBy(asc(benchmarkCache.day));
+  const cachedMap = new Map<string, number>(
+    cached.map((r) => [dayKey(new Date(r.day)), parseFloat(r.close)])
+  );
+
+  const last = cached[cached.length - 1];
+  const fresh =
+    !!last &&
+    Date.now() - new Date(`${last.day}T00:00:00Z`).getTime() < BENCHMARK_TTL_MS;
+  if (fresh && cachedMap.size > 0) return cachedMap;
+
+  // fetch fresh, trying both Yahoo hosts before giving up
+  let closes: Map<string, number> | null = null;
+  for (const host of ["query1", "query2"]) {
+    try {
+      const got = await yahooChart(
+        `https://${host}.finance.yahoo.com/v8/finance/chart/${BENCHMARK_INDEX}?interval=1d&range=1y`
+      );
+      if (got.size > 0) {
+        closes = got;
+        break;
+      }
+    } catch {
+      /* try next host */
+    }
+  }
+
+  if (closes && closes.size > 0) {
+    // upsert every close so the cache stays warm
+    const values = [...closes.entries()].map(([day, close]) => ({
+      index: BENCHMARK_INDEX,
+      day,
+      close: String(close),
+    }));
+    for (const v of values) {
+      await db
+        .insert(benchmarkCache)
+        .values(v)
+        .onConflictDoUpdate({
+          target: [benchmarkCache.index, benchmarkCache.day],
+          set: { close: v.close },
+        });
+    }
+    return new Map([...cachedMap, ...closes]);
+  }
+
+  // final fallback: stale cache beats nothing
+  if (cachedMap.size > 0) return cachedMap;
+  return new Map();
 }
 
 /** S&P 500 index closes, normalized to pct-change vs first point. */
 export async function benchmarkSeries(days: number): Promise<SeriesPoint[]> {
   try {
-    const closes = await yahooHistory("%5EGSPC");
     const windowStart = dayKey(new Date(Date.now() - (days - 1) * 86400_000));
+    const closes = await loadBenchmark(windowStart);
     return [...closes.entries()]
       .filter(([day]) => day >= windowStart)
       .sort(([a], [b]) => a.localeCompare(b))

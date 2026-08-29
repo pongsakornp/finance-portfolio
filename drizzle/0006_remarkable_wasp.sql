@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "pl_view" text DEFAULT 'unrealized' NOT NULL;

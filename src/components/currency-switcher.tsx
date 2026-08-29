@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { setBaseCurrencyAction } from "@/actions/user.actions";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -12,7 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function CurrencySwitcher({ value }: { value: string }) {
+export function CurrencySwitcher({
+  value,
+  triggerClassName = "w-20",
+}: {
+  value: string;
+  triggerClassName?: string;
+}) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -30,7 +37,7 @@ export function CurrencySwitcher({ value }: { value: string }) {
         });
       }}
     >
-      <SelectTrigger className="w-20" aria-label="Display currency">
+      <SelectTrigger className={cn("w-20", triggerClassName)} aria-label="Display currency">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

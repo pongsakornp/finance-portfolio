@@ -1,4 +1,4 @@
-import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
+import { TransactionDialog } from "@/components/features/transaction-dialog";
 import { DeleteButton } from "@/components/features/delete-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export default async function TransactionsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" nativeButton={false} render={<a href="/api/export" download>Export CSV</a>} />
-          <AddTransactionDialog portfolios={portfolios} />
+          <TransactionDialog portfolios={portfolios} />
         </div>
       </div>
 
@@ -99,7 +99,10 @@ export default async function TransactionsPage() {
                           {parseFloat(tx.fee) ? fmtMoney(parseFloat(tx.fee), tx.asset.currency) : "—"}
                         </TableCell>
                         <TableCell>
-                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                          <div className="flex justify-end gap-1">
+                            <TransactionDialog portfolios={portfolios} transaction={tx} />
+                            <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -122,7 +125,10 @@ export default async function TransactionsPage() {
                           </Badge>
                           <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
                         </div>
-                        <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        <div className="flex items-center gap-1">
+                          <TransactionDialog portfolios={portfolios} transaction={tx} />
+                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        </div>
                       </div>
                       <div>
                         <span className="font-medium">{tx.asset.symbol}</span>

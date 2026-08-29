@@ -43,6 +43,7 @@ export type HoldingRow = {
   position: Position;
   valueUsd: number;
   costUsd: number;
+  firstBuyAt: Date;
 };
 
 export type HoldingsView = {
@@ -95,6 +96,7 @@ export async function buildHoldingsView(txs: TxRow[]): Promise<HoldingsView> {
       position,
       valueUsd: Math.round(position.marketValue * rate * 100) / 100,
       costUsd: Math.round(position.costBasis * rate * 100) / 100,
+      firstBuyAt: sorted[0].occurredAt,
     });
   }
 

@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   name: text("name"),
   passwordHash: text("password_hash").notNull(),
   baseCurrency: text("base_currency").notNull().default("USD"), // "USD" | "THB"
+  plView: text("pl_view").notNull().default("unrealized"), // "unrealized" | "daily"
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -109,24 +110,30 @@ export const priceHistory = pgTable(
   (t) => [primaryKey({ columns: [t.assetId, t.day] })]
 );
 
+export const benchmarkCache = pgTable(
+  "benchmark_cache",
+  {
+    index: text("index").notNull(),
+    day: date("day").notNull(),
+    close: numeric("close", { precision: 20, scale: 8 }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.index, t.day] })]
+);
+
 export const fxRates = pgTable("fx_rates", {
   pair: text("pair").primaryKey(), // "USD/THB"
   rate: numeric("rate", { precision: 18, scale: 8 }).notNull(),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
 });
 
-export const snapshots = pgTable(
-  "snapshots",
+export const fxHistory = pgTable(
+  "fx_history",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    portfolioId: uuid("portfolio_id")
-      .notNull()
-      .references(() => portfolios.id, { onDelete: "cascade" }),
+    pair: text("pair").notNull(), // "USD/THB"
     day: date("day").notNull(),
-    valueUsd: numeric("value_usd", { precision: 20, scale: 2 }).notNull(),
-    costUsd: numeric("cost_usd", { precision: 20, scale: 2 }).notNull(),
+    rate: numeric("rate", { precision: 18, scale: 8 }).notNull(),
   },
-  (t) => [uniqueIndex("snapshots_portfolio_day_uq").on(t.portfolioId, t.day)]
+  (t) => [primaryKey({ columns: [t.pair, t.day] })]
 );
 
 export const apiKeys = pgTable(

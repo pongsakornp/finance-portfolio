@@ -2,21 +2,26 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { getRate } from "@/lib/services/fx-service";
+import { baseRate } from "@/lib/services/fx-service";
 import {
   buildHoldingsView,
-  getUserPortfolios,
   getUserTransactions,
 } from "@/lib/services/view-service";
+import { monthlyBreakdown, toUsdReportTxs } from "@/lib/services/report-service";
 import { requireUserId } from "@/lib/session";
+import { fmtMonthYear } from "@/lib/utils/date";
+import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
 import { fmtMoney, fmtQty } from "@/lib/utils/money";
 
 import { AllocationDonut } from "@/components/charts/allocation-donut";
 import { PerformanceChart } from "@/components/charts/performance-chart";
-import { AddTransactionDialog } from "@/components/features/add-transaction-dialog";
-import { HoldingsMobileList } from "@/components/features/holdings-mobile-list";
+import { MonthlyBarsChart } from "@/components/charts/monthly-bars-chart";
+import {
+  HoldingsList,
+} from "@/components/features/holdings-list";
+import { CompactMoney } from "@/components/features/compact-money";
+import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -25,32 +30,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const userId = await requireUserId();
-  const [[user], portfolios] = await Promise.all([
-    db.select({ baseCurrency: users.baseCurrency }).from(users).where(eq(users.id, userId)),
-    getUserPortfolios(userId),
-  ]);
+  const [user] = await db
+    .select({ baseCurrency: users.baseCurrency, plView: users.plView })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   const baseCurrency = user?.baseCurrency ?? "USD";
+  const plView = user?.plView ?? "unrealized";
 
   const txs = await getUserTransactions(userId);
   const view = await buildHoldingsView(txs);
   const t = view.totalsUsd;
 
   // single FX lookup for display conversion
-  const rate =
-    baseCurrency === "USD" ? 1 : (await getRate("USD", baseCurrency)).toNumber();
+  const rate = await baseRate(baseCurrency);
   const money = (usd: number) => fmtMoney(usd * rate, baseCurrency);
 
   const byType = new Map<string, number>();
@@ -64,6 +62,7 @@ export default async function DashboardPage() {
     crypto: "Crypto",
     commodity: "Commodities",
     cash: "Cash",
+    mutualfund: "Fund",
   };
   const allocation = [...byType.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -71,63 +70,50 @@ export default async function DashboardPage() {
 
   const holdings = view.rows.filter((r) => r.position.qty > 0);
 
+  // monthly cash-flow in USD, then displayed in base currency
+  const monthly = monthlyBreakdown(await toUsdReportTxs(txs)).reverse();
+  const contribution = monthly.map((r) => ({
+    month: r.month,
+    value: Math.round((r.invested - r.soldProceeds) * rate * 100) / 100,
+  }));
+  const dividends = monthly.map((r) => ({
+    month: r.month,
+    value: Math.round(r.dividends * rate * 100) / 100,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <AddTransactionDialog portfolios={portfolios} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total value</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{money(t.marketValue)}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            Today{" "}
-            {t.dayChange !== 0 ? (
-              <>
-                <PL value={t.dayChange * rate} /> (
-                <PLPct value={t.dayChangePct} />)
-              </>
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Cost basis</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{money(t.costBasis)}</CardTitle>
-          </CardHeader>
-          <CardContent />
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Unrealized P/L</CardDescription>
-            <CardTitle className="text-2xl">
-              <PL value={t.unrealizedPL * rate} currency={baseCurrency} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <PLPct value={t.unrealizedPLPct} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Realized + Dividends</CardDescription>
-            <CardTitle className="text-2xl">
-              <PL
-                value={(t.realizedPL + t.dividendsReceived) * rate}
-                currency={baseCurrency}
-              />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Dividends {money(t.dividendsReceived)}
-          </CardContent>
-        </Card>
+        <StatCard
+          label="Total value"
+          title={<CompactMoney value={t.marketValue * rate} currency={baseCurrency} />}
+          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} />}
+        />
+        <StatCard
+          label="Cost basis"
+          title={<CompactMoney value={t.costBasis * rate} currency={baseCurrency} />}
+        />
+        <StatCard
+          label="Unrealized P/L"
+          title={<PL value={t.unrealizedPL * rate} currency={baseCurrency} compact />}
+          footer={<PLPct value={t.unrealizedPLPct} />}
+          footerClassName="text-sm"
+        />
+        <StatCard
+          label="Realized + Dividends"
+          title={
+            <PL
+              value={(t.realizedPL + t.dividendsReceived) * rate}
+              currency={baseCurrency}
+              compact
+            />
+          }
+          footer={`Dividends ${money(t.dividendsReceived)}`}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -151,6 +137,35 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Contribution by month</CardTitle>
+            <CardDescription>Net capital added ({baseCurrency})</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MonthlyBarsChart
+              data={contribution}
+              label="Contribution"
+              currency={baseCurrency}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Dividend by month</CardTitle>
+            <CardDescription>Dividends received ({baseCurrency})</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MonthlyBarsChart
+              data={dividends}
+              label="Dividends"
+              currency={baseCurrency}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Holdings ({holdings.length})</CardTitle>
@@ -163,69 +178,27 @@ export default async function DashboardPage() {
               </EmptyDescription>
             </Empty>
           ) : (
-            <>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Asset</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Avg cost</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right">Unrealized P/L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {holdings.map((h) => (
-                      <TableRow key={h.asset.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{h.asset.symbol}</span>
-                            <Badge variant="outline" className="capitalize">
-                              {h.asset.type}
-                            </Badge>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">{h.asset.name}</p>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtQty(h.position.qty)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(h.position.avgCost, h.asset.currency)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(h.price, h.asset.currency)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {money(h.valueUsd)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div>
-                            <PL value={h.position.unrealizedPL * rate} />
-                          </div>
-                          <PLPct value={h.position.unrealizedPLPct} className="text-xs" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <HoldingsMobileList
-                items={holdings.map((h) => ({
-                  key: h.asset.id,
+            <HoldingsList
+              items={holdings.map((h) => {
+                const rowPl = holdingPl(h, rate, plView);
+                return {
+                  id: h.asset.id,
                   symbol: h.asset.symbol,
                   name: h.asset.name,
                   type: h.asset.type,
+                  typeLabel: typeLabel(h.asset.type),
                   qty: fmtQty(h.position.qty),
+                  qtyLabel: typeUnitLabel(h.asset.type),
                   avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
                   price: fmtMoney(h.price, h.asset.currency),
-                  value: money(h.valueUsd),
-                  pl: h.position.unrealizedPL * rate,
-                  plPct: h.position.unrealizedPLPct,
-                }))}
-              />
-            </>
+                  valueNum: Math.round(h.valueUsd * rate * 100) / 100,
+                  valueCurrency: baseCurrency,
+                  pl: rowPl.pl,
+                  plPct: rowPl.plPct,
+                  firstBuyLabel: fmtMonthYear(h.firstBuyAt),
+                };
+              })}
+            />
           )}
         </CardContent>
       </Card>

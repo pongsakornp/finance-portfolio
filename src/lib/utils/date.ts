@@ -18,3 +18,11 @@ export function fmtDate(iso: string | Date): string {
     timeZone: "UTC",
   }).format(new Date(iso));
 }
+
+export function fmtMonthYear(iso: string | Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(iso)).toUpperCase();
+}
