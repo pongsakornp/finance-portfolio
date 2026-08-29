@@ -50,7 +50,11 @@ export function DatePicker({
           defaultMonth={date ?? new Date()}
         />
       </PopoverContent>
-      <input type="hidden" name={name} value={date ? format(date, "yyyy-MM-dd") : ""} />
+      <input
+        type="hidden"
+        name={name}
+        value={date ? `${format(date, "yyyy-MM-dd")}T12:00:00.000Z` : ""}
+      />
     </Popover>
   );
 }

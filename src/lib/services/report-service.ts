@@ -1,8 +1,11 @@
+import Decimal from "decimal.js";
+
 import { monthKey } from "@/lib/utils/date";
 import { getRate } from "@/lib/services/fx-service";
 import type { TxRow } from "@/lib/services/view-service";
 
 export type TxForReport = {
+  assetId?: string;
   type: "buy" | "sell" | "dividend";
   quantity: string | number;
   price: string | number;
@@ -25,7 +28,14 @@ export async function toUsdReportTxs(txs: TxRow[]): Promise<TxForReport[]> {
   const ratesCache = new Map<string, number>();
   for (const tx of txs) {
     if (tx.asset.currency === "USD") {
-      out.push(tx);
+      out.push({
+        assetId: tx.assetId,
+        type: tx.type,
+        quantity: tx.quantity,
+        price: tx.price,
+        fee: tx.fee,
+        occurredAt: tx.occurredAt,
+      });
       continue;
     }
     let r = ratesCache.get(tx.asset.currency);
@@ -36,6 +46,7 @@ export async function toUsdReportTxs(txs: TxRow[]): Promise<TxForReport[]> {
     const q = parseFloat(String(tx.quantity));
     const p = parseFloat(String(tx.price));
     out.push({
+      assetId: tx.assetId,
       type: tx.type,
       // dividends: quantity IS the cash amount → convert it; buy/sell: convert price+fee
       quantity: tx.type === "dividend" ? String(q * r) : String(q),
@@ -49,8 +60,13 @@ export async function toUsdReportTxs(txs: TxRow[]): Promise<TxForReport[]> {
 
 /** Pure monthly aggregation over transactions. Amounts in asset-native currency — caller converts or filters by currency first. */
 export function monthlyBreakdown(txs: TxForReport[]): MonthlyRow[] {
+  const sorted = [...txs].sort(
+    (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
+  );
   const map = new Map<string, MonthlyRow>();
-  for (const tx of txs) {
+  const positions = new Map<string, { qty: Decimal; cost: Decimal }>();
+
+  for (const tx of sorted) {
     const month = monthKey(new Date(tx.occurredAt));
     const row =
       map.get(month) ??
@@ -63,18 +79,42 @@ export function monthlyBreakdown(txs: TxForReport[]): MonthlyRow[] {
         fees: 0,
       } satisfies MonthlyRow);
 
-    const qty = parseFloat(String(tx.quantity));
-    const price = parseFloat(String(tx.price));
-    const fee = parseFloat(String(tx.fee ?? 0));
+    const qty = new Decimal(tx.quantity);
+    const price = new Decimal(tx.price);
+    const fee = new Decimal(tx.fee ?? 0);
+
+    const assetKey = tx.assetId ?? "default";
+    const pos = positions.get(assetKey) ?? { qty: new Decimal(0), cost: new Decimal(0) };
 
     if (tx.type === "buy") {
-      row.invested += qty * price + fee;
+      row.invested += qty.mul(price).plus(fee).toNumber();
+      row.fees += fee.toNumber();
+      pos.qty = pos.qty.plus(qty);
+      pos.cost = pos.cost.plus(qty.mul(price)).plus(fee);
     } else if (tx.type === "sell") {
-      row.soldProceeds += qty * price - fee;
+      row.soldProceeds += qty.mul(price).minus(fee).toNumber();
+      row.fees += fee.toNumber();
+      if (pos.qty.gt(0)) {
+        const sellQty = Decimal.min(qty, pos.qty);
+        const avg = pos.cost.div(pos.qty);
+        const realized = sellQty.mul(price.minus(avg)).minus(fee);
+        row.realizedPL += realized.toNumber();
+        pos.cost = pos.cost.minus(avg.mul(sellQty));
+        pos.qty = pos.qty.minus(sellQty);
+        if (pos.qty.isZero()) pos.cost = new Decimal(0);
+      }
     } else {
-      row.dividends += qty;
-      row.fees += fee;
+      row.dividends += qty.toNumber();
+      row.fees += fee.toNumber();
     }
+    positions.set(assetKey, pos);
+
+    row.invested = Math.round(row.invested * 100) / 100;
+    row.soldProceeds = Math.round(row.soldProceeds * 100) / 100;
+    row.realizedPL = Math.round(row.realizedPL * 100) / 100;
+    row.dividends = Math.round(row.dividends * 100) / 100;
+    row.fees = Math.round(row.fees * 100) / 100;
+
     map.set(month, row);
   }
   return [...map.values()].sort((a, b) => b.month.localeCompare(a.month));

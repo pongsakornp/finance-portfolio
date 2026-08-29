@@ -54,7 +54,7 @@ export async function toggleAlertActive(id: string, active: boolean) {
   // re-arming an alert clears its trigger stamp
   await db
     .update(alerts)
-    .set({ active, triggeredAt: active ? null : undefined })
+    .set(active ? { active: true, triggeredAt: null } : { active: false })
     .where(and(eq(alerts.id, id), eq(alerts.userId, userId)));
   revalidatePath("/alerts");
   return { ok: true };

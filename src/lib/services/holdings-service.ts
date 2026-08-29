@@ -112,8 +112,8 @@ export function computeTotals(
     costBasis: r2(new Decimal(cost)),
     unrealizedPL: r2(new Decimal(unrealized)),
     unrealizedPLPct: cost > 0 ? parseFloat(((unrealized / cost) * 100).toFixed(2)) : 0,
-    realizedPL: sum((p) => p.realizedPL),
-    dividendsReceived: sum((p) => p.dividendsReceived),
+    realizedPL: r2(new Decimal(sum((p) => p.realizedPL))),
+    dividendsReceived: r2(new Decimal(sum((p) => p.dividendsReceived))),
     dayChange: r2(new Decimal(dayChange)),
     dayChangePct: prevMv > 0 ? parseFloat(((dayChange / prevMv) * 100).toFixed(2)) : 0,
   };

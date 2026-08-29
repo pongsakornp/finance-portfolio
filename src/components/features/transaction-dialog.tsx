@@ -197,7 +197,9 @@ export function TransactionDialog({
             </Field>
 
             <Field>
-              <FieldLabel className="text-muted-foreground">Symbol</FieldLabel>
+              <FieldLabel className="text-muted-foreground">
+                {assetType === "cash" ? "Bank name" : "Symbol"}
+              </FieldLabel>
               <FieldContent>
                 <Input
                   name="symbol"
@@ -209,7 +211,7 @@ export function TransactionDialog({
                       : assetType === "commodity"
                         ? "XAUUSD=X (gold), CL=F (oil)"
                         : assetType === "cash"
-                          ? "USD"
+                          ? "e.g. KBank"
                           : assetType === "mutualfund"
                             ? "B-EQUITY (Finnomena code)"
                             : "AAPL / PTT.BK / TDEX.BK"
@@ -231,7 +233,7 @@ export function TransactionDialog({
                 <FieldLabel className="text-muted-foreground">Currency</FieldLabel>
                 <FieldContent>
                   <input type="hidden" name="assetCurrency" value={cashCurrency} />
-                  <Select defaultValue={cashCurrency} onValueChange={(v) => v && setCashCurrency(v)}>
+                  <Select value={cashCurrency} onValueChange={(v) => v && setCashCurrency(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>

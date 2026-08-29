@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -22,13 +22,18 @@ export async function resolveApiUser(req: Request): Promise<string | null> {
   const header = req.headers.get("authorization") ?? "";
   if (!header.startsWith(`Bearer ${API_KEY_PREFIX}`)) return null;
   const token = header.slice(7).trim();
+  const tokenHash = hashApiKey(token);
 
   const [row] = await db
-    .select({ id: apiKeys.id, userId: apiKeys.userId })
+    .select({ id: apiKeys.id, userId: apiKeys.userId, keyHash: apiKeys.keyHash })
     .from(apiKeys)
-    .where(and(eq(apiKeys.keyHash, hashApiKey(token)), isNull(apiKeys.revokedAt)))
+    .where(and(eq(apiKeys.keyHash, tokenHash), isNull(apiKeys.revokedAt)))
     .limit(1);
   if (!row) return null;
+
+  const a = Buffer.from(row.keyHash, "hex");
+  const b = Buffer.from(tokenHash, "hex");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
   await db
     .update(apiKeys)

@@ -73,11 +73,37 @@ describe("buildHoldingsView", () => {
     expect(view.rows[0].asset.symbol).toBe("AAPL");
   });
 
-  it("still builds all holdings when every quote succeeds", async () => {
+  it("converts non-USD cost basis and realized PL into USD totals", async () => {
+    getQuote
+      .mockResolvedValueOnce({
+        assetId: "thb-1",
+        symbol: "PTT.BK",
+        name: "PTT",
+        type: "stock" as const,
+        currency: "THB",
+        price: 35,
+        previousClose: 34,
+      })
+      .mockResolvedValueOnce({
+        assetId: "usd-1",
+        symbol: "AAPL",
+        name: "Apple",
+        type: "stock" as const,
+        currency: "USD",
+        price: 150,
+        previousClose: 148,
+      });
+
+    // 1 THB = 0.03 USD
+    getRate.mockResolvedValue({ toNumber: () => 0.03 });
+
     const view = await buildHoldingsView([
-      tx("a1", "AAPL", "stock", "USD"),
-      tx("a2", "MSFT", "stock", "USD"),
+      tx("thb-1", "PTT.BK", "stock", "THB"), // qty 1 @ 10 THB = 0.30 USD
+      tx("usd-1", "AAPL", "stock", "USD"), // qty 1 @ 10 USD = 10 USD
     ]);
+
     expect(view.rows).toHaveLength(2);
+    // Cost basis should be 0.30 USD + 10 USD = 10.30 USD (not 10 THB + 10 USD = 20)
+    expect(view.totalsUsd.costBasis).toBe(10.3);
   });
 });
