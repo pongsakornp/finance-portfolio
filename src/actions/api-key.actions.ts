@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -32,24 +32,44 @@ export async function createApiKeyAction(name: string) {
   }
 }
 
-export async function revokeApiKeyAction(id: string) {
+export async function rotateApiKeyAction(id: string) {
+  const userId = await requireUserId();
+  if (!id || typeof id !== "string") return { error: "Invalid key ID" };
+
+  try {
+    const [existing] = await db
+      .select({ name: apiKeys.name })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)))
+      .limit(1);
+    if (!existing) return { error: "API key not found" };
+
+    const { token, keyHash, prefix } = generateApiKey();
+    await db
+      .update(apiKeys)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)));
+    await db
+      .insert(apiKeys)
+      .values({ userId, name: existing.name, keyHash, prefix });
+    revalidatePath("/settings");
+    return { ok: true as const, token };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to rotate API key" };
+  }
+}
+
+export async function deleteApiKeyAction(id: string) {
   const userId = await requireUserId();
   if (!id || typeof id !== "string") return { error: "Invalid key ID" };
 
   try {
     await db
-      .update(apiKeys)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(apiKeys.id, id),
-          eq(apiKeys.userId, userId),
-          isNull(apiKeys.revokedAt)
-        )
-      );
+      .delete(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)));
     revalidatePath("/settings");
     return { ok: true as const };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Failed to revoke API key" };
+    return { error: e instanceof Error ? e.message : "Failed to delete API key" };
   }
 }

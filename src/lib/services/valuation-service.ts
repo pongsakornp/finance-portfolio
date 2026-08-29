@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import { db } from "@/lib/db";
 import { assets, benchmarkCache, priceHistory } from "@/lib/db/schema";
 import type { Asset } from "@/lib/services/quote-service";
+import { setYahooSymbol } from "@/lib/services/quote-service";
 import { getRate, loadFxHistory } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
 
@@ -74,6 +75,22 @@ async function finnomenaHistory(symbol: string): Promise<Map<string, number>> {
   return out;
 }
 
+/** SET listed share/ETF daily closes via Finnomena's public tradingview feed. Bare symbol. */
+async function finnomenaStockHistory(symbol: string): Promise<Map<string, number>> {
+  const res = await fetch(
+    `https://www.finnomena.com/market-info/api/tradingview/TH/trade/${encodeURIComponent(symbol)}?period=MAX`,
+    { headers: { Accept: "application/json" }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Finnomena history ${symbol}: HTTP ${res.status}`);
+  const json = (await res.json()) as { t?: number[]; c?: Array<string | number> };
+  const out = new Map<string, number>();
+  json.t?.forEach((ts, i) => {
+    const close = json.c?.[i];
+    if (close != null) out.set(dayKey(new Date(ts * 1000)), parseFloat(String(close)));
+  });
+  return out;
+}
+
 /** Backfills daily closes into price_history when stale (>3 days). */
 async function ensureHistory(asset: Asset): Promise<void> {
   // cash never moves — nothing to fetch
@@ -95,7 +112,11 @@ async function ensureHistory(asset: Asset): Promise<void> {
           : await yahooHistory(`${asset.symbol}-USD`)
         : asset.type === "mutualfund"
           ? await finnomenaHistory(asset.symbol)
-          : await yahooHistory(asset.symbol);
+          : asset.market === "SET"
+            ? await finnomenaStockHistory(asset.symbol.replace(/\.BK$/, "")).catch(() =>
+                yahooHistory(setYahooSymbol(asset.symbol))
+              )
+            : await yahooHistory(asset.symbol);
     if (closes.size === 0) return;
     const rows = [...closes.entries()].map(([day, close]) => ({
       assetId: asset.id,

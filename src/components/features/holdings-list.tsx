@@ -25,6 +25,7 @@ export type HoldingsListItem = {
   valueNum: number;
   valueCurrency: string;
   pl: number;
+  plCurrency: string;
   plPct: number;
   firstBuyLabel: string;
 };
@@ -116,7 +117,7 @@ export function HoldingsList({ items }: { items: HoldingsListItem[] }) {
                     {fmtMoneyCompact(h.valueNum, h.valueCurrency)}
                   </span>
                   <span className="text-xs">
-                    <PL value={h.pl} /> (<PLPct value={h.plPct} />)
+                    <PL value={h.pl} currency={h.plCurrency} /> (<PLPct value={h.plPct} />)
                   </span>
                 </div>
               </div>

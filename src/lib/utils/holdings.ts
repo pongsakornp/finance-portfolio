@@ -31,25 +31,20 @@ export function avatarText(symbol: string): string {
 }
 
 export type HoldingPlInput = {
-  price: number;
-  previousClose: number | null;
-  position: { qty: number; unrealizedPL: number; unrealizedPLPct: number };
+  unrealizedPlUsd: number;
+  dayChangeUsd: number;
+  unrealizedPLPct: number;
+  dayChangePct: number;
 };
 
-/** P/L for a holding row — unrealized since open (default) or daily change. */
+/** P/L for a holding row, expressed in base currency via a USD→base `rate`. */
 export function holdingPl(
   h: HoldingPlInput,
   rate: number,
   plView: string
 ): { pl: number; plPct: number } {
   if (plView === "daily") {
-    const prev = h.previousClose;
-    if (prev == null || prev <= 0) return { pl: 0, plPct: 0 };
-    const daily = (h.price - prev) * h.position.qty;
-    return { pl: daily * rate, plPct: ((h.price - prev) / prev) * 100 };
+    return { pl: h.dayChangeUsd * rate, plPct: h.dayChangePct };
   }
-  return {
-    pl: h.position.unrealizedPL * rate,
-    plPct: h.position.unrealizedPLPct,
-  };
+  return { pl: h.unrealizedPlUsd * rate, plPct: h.unrealizedPLPct };
 }

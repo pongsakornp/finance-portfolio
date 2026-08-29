@@ -180,7 +180,16 @@ export default async function DashboardPage() {
           ) : (
             <HoldingsList
               items={holdings.map((h) => {
-                const rowPl = holdingPl(h, rate, plView);
+                const rowPl = holdingPl(
+                  {
+                    unrealizedPlUsd: h.unrealizedPlUsd,
+                    dayChangeUsd: h.dayChangeUsd,
+                    unrealizedPLPct: h.position.unrealizedPLPct,
+                    dayChangePct: h.dayChangePct,
+                  },
+                  rate,
+                  plView
+                );
                 return {
                   id: h.asset.id,
                   symbol: h.asset.symbol,
@@ -194,6 +203,7 @@ export default async function DashboardPage() {
                   valueNum: Math.round(h.valueUsd * rate * 100) / 100,
                   valueCurrency: baseCurrency,
                   pl: rowPl.pl,
+                  plCurrency: baseCurrency,
                   plPct: rowPl.plPct,
                   firstBuyLabel: fmtMonthYear(h.firstBuyAt),
                 };

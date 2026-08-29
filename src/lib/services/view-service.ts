@@ -48,6 +48,9 @@ export type HoldingRow = {
   position: Position;
   valueUsd: number;
   costUsd: number;
+  unrealizedPlUsd: number;
+  dayChangeUsd: number;
+  dayChangePct: number;
   firstBuyAt: Date;
 };
 
@@ -99,13 +102,23 @@ export async function buildHoldingsView(txs: TxRow[]): Promise<HoldingsView> {
     );
     const position = computePosition(sorted, quote.price);
     const rate = asset.currency === "USD" ? 1 : (usdRates.get(asset.currency) ?? 1);
+    const valueUsd = Math.round(position.marketValue * rate * 100) / 100;
+    const costUsd = Math.round(position.costBasis * rate * 100) / 100;
+    const prev = quote.previousClose;
     rows.push({
       asset,
       price: quote.price,
       previousClose: quote.previousClose,
       position,
-      valueUsd: Math.round(position.marketValue * rate * 100) / 100,
-      costUsd: Math.round(position.costBasis * rate * 100) / 100,
+      valueUsd,
+      costUsd,
+      unrealizedPlUsd: Math.round((valueUsd - costUsd) * 100) / 100,
+      dayChangeUsd:
+        prev != null ? Math.round((quote.price - prev) * position.qty * rate * 100) / 100 : 0,
+      dayChangePct:
+        prev != null && prev > 0
+          ? parseFloat(((quote.price - prev) / prev * 100).toFixed(2))
+          : 0,
       firstBuyAt: sorted[0].occurredAt,
     });
   }

@@ -2,10 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { createApiKeyAction, revokeApiKeyAction } from "@/actions/api-key.actions";
+import {
+  createApiKeyAction,
+  deleteApiKeyAction,
+  rotateApiKeyAction,
+} from "@/actions/api-key.actions";
 import { DeleteButton } from "@/components/features/delete-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +58,20 @@ export function ApiKeysCard({ keys }: { keys: ApiKeyRow[] }) {
       setToken(res.token ?? null);
       setCopied(false);
       setName("");
+      router.refresh();
+    });
+  }
+
+  function rotate(key: ApiKeyRow) {
+    startTransition(async () => {
+      const res = await rotateApiKeyAction(key.id);
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      setToken(res.token ?? null);
+      setCopied(false);
+      toast.success("Key rotated");
       router.refresh();
     });
   }
@@ -142,10 +160,19 @@ export function ApiKeysCard({ keys }: { keys: ApiKeyRow[] }) {
                       </TableCell>
                       <TableCell>
                         {!k.revoked && (
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Rotate key"
+                              disabled={pending}
+                              onClick={() => { if (confirm("Rotate this key? The current token will be revoked and replaced.")) rotate(k); }}
+                            >
+                              <RefreshCwIcon className="text-muted-foreground" />
+                            </Button>
                             <DeleteButton
-                              action={revokeApiKeyAction.bind(null, k.id)}
-                              confirmText="Revoke this key? Agents using it will lose access."
+                              action={deleteApiKeyAction.bind(null, k.id)}
+                              confirmText="Delete this key permanently? Agents using it will lose access."
                             />
                           </div>
                         )}
@@ -168,10 +195,21 @@ export function ApiKeysCard({ keys }: { keys: ApiKeyRow[] }) {
                           <Badge variant="success">Active</Badge>
                         )}
                         {!k.revoked && (
-                          <DeleteButton
-                            action={revokeApiKeyAction.bind(null, k.id)}
-                            confirmText="Revoke this key? Agents using it will lose access."
-                          />
+                          <div className="flex items-center">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label="Rotate key"
+                              disabled={pending}
+                              onClick={() => { if (confirm("Rotate this key? The current token will be revoked and replaced.")) rotate(k); }}
+                            >
+                              <RefreshCwIcon />
+                            </Button>
+                            <DeleteButton
+                              action={deleteApiKeyAction.bind(null, k.id)}
+                              confirmText="Delete this key permanently? Agents using it will lose access."
+                            />
+                          </div>
                         )}
                       </div>
                     </div>
