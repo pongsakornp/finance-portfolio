@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
 import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
+import { resolveCoinId } from "@/lib/services/coin-map";
 import {
   ASSET_TYPES,
   createTransactionSchema,
@@ -40,7 +41,7 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
       currency: input.currency?.toUpperCase() ?? "USD",
       externalId:
         input.externalId ??
-        (input.type === "crypto" ? input.symbol.toLowerCase() : null),
+        (input.type === "crypto" ? resolveCoinId(input.symbol) ?? input.symbol.toLowerCase() : null),
     })
     .returning({ id: assets.id });
   return created.id;
