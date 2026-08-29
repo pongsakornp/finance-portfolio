@@ -116,7 +116,7 @@ export function HoldingsList({ items }: { items: HoldingsListItem[] }) {
                     {fmtMoneyCompact(h.valueNum, h.valueCurrency)}
                   </span>
                   <span className="text-xs">
-                    <PL value={h.pl} /> (<PLPct value={h.plPct} />)
+                    <PL value={h.pl} currency={h.valueCurrency} compact /> (<PLPct value={h.plPct} />)
                   </span>
                 </div>
               </div>

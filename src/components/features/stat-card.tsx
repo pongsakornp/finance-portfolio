@@ -38,17 +38,19 @@ export function TodayFooter({
   dayChange,
   dayChangePct,
   rate,
+  currency,
 }: {
   dayChange: number;
   dayChangePct: number;
   rate: number;
+  currency: string;
 }) {
   return (
     <>
       Today{" "}
       {dayChange !== 0 ? (
         <>
-          <PL value={dayChange * rate} /> (<PLPct value={dayChangePct} />)
+          <PL value={dayChange * rate} currency={currency} /> (<PLPct value={dayChangePct} />)
         </>
       ) : (
         <span className="text-muted-foreground">—</span>
