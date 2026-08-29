@@ -6,10 +6,14 @@ export const dynamic = "force-dynamic";
 
 function normalize(points: Array<{ day: string; value: number }>) {
   if (points.length === 0) return [];
-  const base = points.find((p) => p.value > 0)?.value ?? 1;
-  return points.map((p) => ({
+  const firstPositiveIdx = points.findIndex((p) => p.value > 0);
+  if (firstPositiveIdx === -1) {
+    return points.map((p) => ({ day: p.day, pct: 0 }));
+  }
+  const base = points[firstPositiveIdx].value;
+  return points.map((p, idx) => ({
     day: p.day,
-    pct: Math.round(((p.value - base) / base) * 10000) / 100,
+    pct: idx < firstPositiveIdx ? 0 : Math.round(((p.value - base) / base) * 10000) / 100,
   }));
 }
 

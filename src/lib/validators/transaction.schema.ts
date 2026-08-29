@@ -21,9 +21,13 @@ export const upsertAssetSchema = z.object({
   externalId: z.string().max(60).optional(),
 });
 
-export const createTransactionSchema = z.object({
+export const transactionObjectSchema = z.object({
   portfolioId: z.uuid(),
-  symbol: z.string().min(1).max(20),
+  symbol: z
+    .string()
+    .min(1)
+    .max(20)
+    .transform((s) => s.trim().toUpperCase()),
   assetType: z.enum(ASSET_TYPES),
   assetName: z.string().min(1).max(80).optional(),
   externalId: z.string().max(60).optional(),
@@ -36,6 +40,11 @@ export const createTransactionSchema = z.object({
   occurredAt: z.coerce.date(),
   note: z.string().max(200).optional(),
 });
+
+export const createTransactionSchema = transactionObjectSchema.refine(
+  (data) => data.type === "dividend" || data.price > 0,
+  { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
+);
 
 export type CreateTransactionInput = z.output<typeof createTransactionSchema>;
 /** Input shape: fields with defaults (currency) stay optional */

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
+import { ASSET_TYPES } from "@/lib/validators/transaction.schema";
 import { importTransactionsAction } from "@/actions/transaction.actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -28,13 +29,14 @@ import {
 type ParsedRow = {
   symbol: string;
   name?: string;
-  assetType: "stock" | "etf" | "crypto" | "commodity" | "cash";
+  assetType: (typeof ASSET_TYPES)[number];
   type: "buy" | "sell" | "dividend";
   quantity: number;
   price: number;
   fee: number;
   occurredAt: string;
   currency?: string; // cash only
+  note?: string;
 };
 
 const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency
@@ -75,6 +77,7 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
             fee: parseFloat(r.fee ?? "0") || 0,
             occurredAt: (r.date ?? r.occurred_at ?? "").trim(),
             currency: r.currency?.trim().toUpperCase() || undefined,
+            note: r.note?.trim() || undefined,
           });
         }
         setRows(parsed.filter((p) => !isNaN(p.quantity)));

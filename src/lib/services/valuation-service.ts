@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import Decimal from "decimal.js";
 
 import { db } from "@/lib/db";
 import { assets, benchmarkCache, priceHistory } from "@/lib/db/schema";
@@ -107,7 +108,7 @@ async function ensureHistory(asset: Asset): Promise<void> {
         .values(rows.slice(i, i + 500))
         .onConflictDoUpdate({
           target: [priceHistory.assetId, priceHistory.day],
-          set: { close: rows[i].close, source: 1 },
+          set: { close: sql`excluded.close`, source: 1 },
         });
     }
   } catch {
@@ -199,10 +200,10 @@ export async function portfolioSeries(
     if (timeline.length === 0) return [];
   }
 
-  const holdings = new Map<string, { qty: number }>();
+  const holdings = new Map<string, Decimal>();
   let ti = 0;
   const points: SeriesPoint[] = [];
-  const lastClose = new Map<string, number>();
+  const lastClose = new Map<string, Decimal>();
 
   for (const day of timeline) {
     while (
@@ -210,26 +211,32 @@ export async function portfolioSeries(
       dayKey(new Date(txsAsc[ti].occurredAt.getTime())) <= day
     ) {
       const t = txsAsc[ti++];
-      const h = holdings.get(t.asset.id) ?? { qty: 0 };
-      if (t.type === "buy") h.qty += parseFloat(t.quantity);
-      else if (t.type === "sell") h.qty = Math.max(0, h.qty - parseFloat(t.quantity));
-      holdings.set(t.asset.id, h);
-    }
-    let value = 0;
-    for (const a of distinctAssets) {
-      // cash has no history rows — constant price 1 in its own currency
-      const close =
-        closeMaps.get(a.id)?.get(day) ?? (a.type === "cash" ? 1 : undefined);
-      if (close != null) lastClose.set(a.id, close);
-      const lc = lastClose.get(a.id);
-      const qty = holdings.get(a.id)?.qty ?? 0;
-      if (lc != null && qty > 0) {
-        const cur = a.currency;
-        const perDay = cur === "USD" ? 1 : fxByDay.get(cur)?.get(day) ?? usdRates.get(cur) ?? 1;
-        value += qty * lc * perDay;
+      const prevQty = holdings.get(t.asset.id) ?? new Decimal(0);
+      const q = new Decimal(t.quantity);
+      if (t.type === "buy") {
+        holdings.set(t.asset.id, prevQty.plus(q));
+      } else if (t.type === "sell") {
+        holdings.set(t.asset.id, Decimal.max(0, prevQty.minus(q)));
       }
     }
-    points.push({ day, value: Math.round(value * 100) / 100 });
+    let dayValue = new Decimal(0);
+    for (const a of distinctAssets) {
+      // cash has no history rows — constant price 1 in its own currency
+      const rawClose =
+        closeMaps.get(a.id)?.get(day) ?? (a.type === "cash" ? 1 : undefined);
+      if (rawClose != null) lastClose.set(a.id, new Decimal(rawClose));
+      const lc = lastClose.get(a.id);
+      const qty = holdings.get(a.id) ?? new Decimal(0);
+      if (lc != null && qty.gt(0)) {
+        const cur = a.currency;
+        const perDay =
+          cur === "USD"
+            ? new Decimal(1)
+            : new Decimal(fxByDay.get(cur)?.get(day) ?? usdRates.get(cur) ?? 1);
+        dayValue = dayValue.plus(qty.mul(lc).mul(perDay));
+      }
+    }
+    points.push({ day, value: dayValue.toDecimalPlaces(2).toNumber() });
   }
 
   // drop leading zero-value days (before the first position) so %-normalization

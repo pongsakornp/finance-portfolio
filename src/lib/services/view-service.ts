@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
@@ -18,16 +18,21 @@ export async function getUserTransactions(
   userId?: string,
   portfolioId?: string
 ): Promise<TxRow[]> {
+  const whereClause =
+    userId && portfolioId
+      ? and(eq(portfolios.userId, userId), eq(transactions.portfolioId, portfolioId))
+      : userId
+        ? eq(portfolios.userId, userId)
+        : portfolioId
+          ? eq(transactions.portfolioId, portfolioId)
+          : undefined;
+
   const rows = await db
     .select({ tx: transactions, asset: assets })
     .from(transactions)
     .innerJoin(assets, eq(assets.id, transactions.assetId))
     .innerJoin(portfolios, eq(portfolios.id, transactions.portfolioId))
-    .where(
-      portfolioId
-        ? eq(transactions.portfolioId, portfolioId)
-        : eq(portfolios.userId, userId!)
-    )
+    .where(whereClause)
     .orderBy(asc(transactions.occurredAt));
   return rows.map((r) => ({ ...r.tx, asset: r.asset }));
 }
@@ -107,15 +112,20 @@ export async function buildHoldingsView(txs: TxRow[]): Promise<HoldingsView> {
 
   // recompute grand totals in USD space
   const totalsUsd = computeTotals(
-    rows.map((r) => ({
-      position: {
-        ...r.position,
-        marketValue: r.valueUsd,
-        unrealizedPL:
-          Math.round((r.valueUsd - r.costUsd) * 100) / 100,
-      },
-      previousClose: r.previousClose,
-    }))
+    rows.map((r) => {
+      const rate = r.asset.currency === "USD" ? 1 : (usdRates.get(r.asset.currency) ?? 1);
+      return {
+        position: {
+          ...r.position,
+          costBasis: r.costUsd,
+          marketValue: r.valueUsd,
+          unrealizedPL: Math.round((r.valueUsd - r.costUsd) * 100) / 100,
+          realizedPL: Math.round(r.position.realizedPL * rate * 100) / 100,
+          dividendsReceived: Math.round(r.position.dividendsReceived * rate * 100) / 100,
+        },
+        previousClose: r.previousClose !== null ? r.previousClose * rate : null,
+      };
+    })
   );
 
   return { rows, totalsUsd };

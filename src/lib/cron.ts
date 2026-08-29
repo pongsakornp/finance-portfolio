@@ -19,6 +19,7 @@ async function checkAlerts() {
   for (const { alert, asset } of rows) {
     try {
       const quote = await getQuote(asset); // side effect: refreshes cache
+      if (quote.price <= 0) continue;
       const threshold = parseFloat(alert.threshold);
       const hit =
         alert.direction === "above"

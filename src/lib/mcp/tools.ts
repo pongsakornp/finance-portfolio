@@ -22,7 +22,10 @@ import {
   createAlertSchema,
   setBaseCurrencySchema,
 } from "@/lib/validators/alert.schema";
-import { createTransactionSchema } from "@/lib/validators/transaction.schema";
+import {
+  ASSET_TYPES,
+  transactionObjectSchema,
+} from "@/lib/validators/transaction.schema";
 
 const okJson = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
@@ -40,9 +43,14 @@ function revalidateMutated() {
 }
 
 // z.coerce.date() can't serialize to JSON Schema (breaks tools/list) — ISO strings over the wire
-const mcpTxSchema = createTransactionSchema.extend({
+const mcpTxObjectSchema = transactionObjectSchema.extend({
   occurredAt: z.iso.datetime(),
 });
+
+const mcpTxSchema = mcpTxObjectSchema.refine(
+  (data) => data.type === "dividend" || data.price > 0,
+  { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
+);
 
 /** Loads holdings views scoped to the user; throws when portfolioId is foreign. */
 async function loadViews(userId: string, portfolioId?: string) {
@@ -80,7 +88,7 @@ export function buildMcpServer(userId: string): McpServer {
           views.map(({ portfolio, view }) => ({
             id: portfolio.id,
             name: portfolio.name,
-            holdingsCount: view.rows.length,
+            holdingsCount: view.rows.filter((r) => r.position.qty > 0).length,
             totals: view.totalsUsd,
           })),
         );
@@ -279,12 +287,12 @@ export function buildMcpServer(userId: string): McpServer {
         "Live quote for an asset symbol (5-min stock/ETF TTL, 60s crypto), served through the app's price cache.",
       inputSchema: {
         symbol: z.string().min(1).max(20),
-        assetType: z.enum(["stock", "etf", "crypto"]).optional(),
+        assetType: z.enum(ASSET_TYPES).optional(),
       },
     },
     async ({ symbol, assetType }) => {
       try {
-        const [asset] = await db
+        let [asset] = await db
           .select()
           .from(assets)
           .where(
@@ -294,6 +302,14 @@ export function buildMcpServer(userId: string): McpServer {
             )
           )
           .limit(1);
+        if (!asset) {
+          const id = await upsertAsset({
+            symbol: symbol.toUpperCase(),
+            name: symbol.toUpperCase(),
+            type: assetType ?? "stock",
+          });
+          [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+        }
         if (!asset) throw new Error(`Unknown asset ${symbol}`);
         return okJson(await getQuote(asset));
       } catch (e) {
@@ -395,7 +411,7 @@ export function buildMcpServer(userId: string): McpServer {
     {
       description:
         "Record buy/sell/dividend. buy/sell take quantity in units + price per unit; dividend takes the cash amount in `quantity` (price ignored, fee optional). occurredAt is an ISO datetime.",
-      inputSchema: mcpTxSchema.shape,
+      inputSchema: mcpTxObjectSchema.shape,
     },
     async (args) => {
       try {
@@ -440,7 +456,7 @@ export function buildMcpServer(userId: string): McpServer {
       inputSchema: {
         portfolioId: z.uuid(),
         rows: z.array(
-          createTransactionSchema
+          transactionObjectSchema
             .omit({ portfolioId: true, occurredAt: true })
             .extend({ occurredAt: z.iso.datetime() })
         ),
@@ -587,7 +603,7 @@ export function buildMcpServer(userId: string): McpServer {
         const s = symbol.toUpperCase();
         const views = await loadViews(userId, portfolioId);
         for (const { portfolio, view } of views) {
-          const row = view.rows.find((r) => r.asset.symbol === s);
+          const row = view.rows.find((r) => r.asset.symbol === s && r.position.qty > 0);
           if (!row) continue;
           return okJson({
             portfolio: portfolio.name,

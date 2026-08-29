@@ -14,23 +14,34 @@ import {
 export type ImportRow = {
   symbol: string;
   name?: string;
+  assetName?: string;
   assetType: (typeof ASSET_TYPES)[number];
   type: "buy" | "sell" | "dividend";
   quantity: number;
   price: number;
   fee?: number;
   occurredAt: string; // ISO date
-  currency?: string; // cash only
+  currency?: string; // cash only (legacy/CSV alias)
+  assetCurrency?: string; // cash only
+  note?: string;
+  externalId?: string;
 };
 
 /** find-or-create by (symbol, type) — asset rows are shared across users */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   const [existing] = await db
-    .select({ id: assets.id })
+    .select({ id: assets.id, currency: assets.currency })
     .from(assets)
     .where(and(eq(assets.symbol, input.symbol), eq(assets.type, input.type)))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    // keep the asset's currency current when a cash edit changes it (find-or-create
+    // matches on symbol+type only, so a currency change would otherwise be silently lost)
+    if (input.currency && existing.currency !== input.currency) {
+      await db.update(assets).set({ currency: input.currency }).where(eq(assets.id, existing.id));
+    }
+    return existing.id;
+  }
 
   const [created] = await db
     .insert(assets)
@@ -160,6 +171,8 @@ export async function importTransactions(
       ...row,
       portfolioId,
       occurredAt: new Date(row.occurredAt),
+      assetName: row.assetName ?? row.name,
+      assetCurrency: row.assetCurrency ?? row.currency,
     });
     if (!parsed.success) {
       errors.push(`Row ${i + 2}: ${parsed.error.issues[0]?.message}`);
@@ -174,7 +187,7 @@ export async function importTransactions(
         d.assetType === "crypto"
           ? "USD"
           : d.assetType === "cash"
-            ? (row.currency?.toUpperCase() ?? "USD")
+            ? (d.assetCurrency?.toUpperCase() ?? "USD")
             : d.assetType === "mutualfund"
               ? "THB"
               : undefined,
@@ -188,6 +201,7 @@ export async function importTransactions(
       price: String(d.price),
       fee: String(d.fee ?? 0),
       occurredAt: d.occurredAt,
+      note: d.note,
     });
     imported++;
   }

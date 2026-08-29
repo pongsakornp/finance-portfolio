@@ -58,9 +58,12 @@ async function fetchCoinGecko(id: string): Promise<{ price: number; previousClos
   if (!entry?.usd) throw new Error(`CoinGecko ${id}: no price`);
   return {
     price: entry.usd,
-    previousClose: entry.usd_24h_change
-      ? entry.usd / (1 + entry.usd_24h_change / 100)
-      : null,
+    previousClose:
+      entry.usd_24h_change != null
+        ? entry.usd_24h_change === -100
+          ? 0
+          : entry.usd / (1 + entry.usd_24h_change / 100)
+        : null,
     currency: "USD",
   };
 }

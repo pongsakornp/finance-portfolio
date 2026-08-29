@@ -9,7 +9,7 @@ vi.mock("@/lib/services/portfolio-service", () => ({ assertOwnedPortfolio }));
 vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
 
 import { db } from "@/lib/db";
-import { updateTransaction } from "@/lib/services/transaction-service";
+import { updateTransaction, upsertAsset } from "@/lib/services/transaction-service";
 
 const data = {
   portfolioId: "port-1",
@@ -31,6 +31,41 @@ function selectResolves(rows: unknown[]) {
     }),
   } as never);
 }
+
+describe("upsertAsset", () => {
+  it("updates an existing cash asset's currency when it differs", async () => {
+    selectResolves([{ id: "asset-1", currency: "USD" }]);
+    const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+    vi.mocked(db.update).mockImplementation(() => ({ set } as never));
+
+    await expect(
+      upsertAsset({
+        symbol: "KBank",
+        name: "KBank",
+        type: "cash",
+        currency: "THB",
+      })
+    ).resolves.toBe("asset-1");
+
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ currency: "THB" }));
+  });
+
+  it("does not touch currency when it already matches", async () => {
+    selectResolves([{ id: "asset-1", currency: "THB" }]);
+    vi.mocked(db.update).mockClear();
+
+    await expect(
+      upsertAsset({
+        symbol: "KBank",
+        name: "KBank",
+        type: "cash",
+        currency: "THB",
+      })
+    ).resolves.toBe("asset-1");
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+});
 
 describe("updateTransaction", () => {
   it("throws when the transaction does not exist", async () => {

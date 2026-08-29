@@ -19,6 +19,15 @@ export async function POST(req: Request) {
   await server.connect(transport);
   try {
     return await transport.handleRequest(req);
+  } catch (e) {
+    return Response.json(
+      {
+        jsonrpc: "2.0",
+        error: { code: -32603, message: e instanceof Error ? e.message : "Internal error" },
+        id: null,
+      },
+      { status: 500 }
+    );
   } finally {
     await server.close();
   }

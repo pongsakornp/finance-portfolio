@@ -82,17 +82,21 @@ export async function loadFxHistory(
 }
 
 async function fetchFrankfurter(cur: string, fromYmd: string, toYmd: string) {
-  const res = await fetch(
-    `https://api.frankfurter.dev/v1/${fromYmd}..${toYmd}?base=${encodeURIComponent(cur)}&symbols=USD`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) throw new Error(`Frankfurter ${cur}/${fromYmd}..${toYmd}: HTTP ${res.status}`);
-  const json = (await res.json()) as { rates?: Record<string, { USD?: number }> };
-  const out = new Map<string, number>();
-  for (const [day, r] of Object.entries(json.rates ?? {})) {
-    if (r.USD != null) out.set(day, r.USD);
+  try {
+    const res = await fetch(
+      `https://api.frankfurter.dev/v1/${fromYmd}..${toYmd}?base=${encodeURIComponent(cur)}&symbols=USD`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return new Map<string, number>();
+    const json = (await res.json()) as { rates?: Record<string, { USD?: number }> };
+    const out = new Map<string, number>();
+    for (const [day, r] of Object.entries(json.rates ?? {})) {
+      if (r.USD != null) out.set(day, r.USD);
+    }
+    return out;
+  } catch {
+    return new Map<string, number>();
   }
-  return out;
 }
 
 /** Backfill daily CUR→USD rates (year chunks) for all non-USD asset currencies. */
@@ -111,6 +115,7 @@ export async function warmFxHistory(): Promise<void> {
         const fromYmd = `${y}-01-01`;
         const toYmd = `${y}-12-31`;
         const closes = await fetchFrankfurter(cur, fromYmd, toYmd);
+        if (closes.size === 0) continue;
         const vals = [...closes.entries()]
           .filter(([day]) => day >= fromYmd && day <= end)
           .map(([day, rate]) => ({ pair, day, rate: String(rate) }));
@@ -122,6 +127,22 @@ export async function warmFxHistory(): Promise<void> {
               target: [fxHistory.pair, fxHistory.day],
               set: { rate: sql`excluded.rate` },
             });
+        }
+      }
+
+      // Ensure at least current rate is recorded if no history was available (non-ECB currencies)
+      const [existing] = await db
+        .select({ day: fxHistory.day })
+        .from(fxHistory)
+        .where(eq(fxHistory.pair, pair))
+        .limit(1);
+      if (!existing) {
+        const spot = await getRate(cur, "USD").catch(() => null);
+        if (spot) {
+          await db
+            .insert(fxHistory)
+            .values({ pair, day: end, rate: spot.toString() })
+            .onConflictDoNothing();
         }
       }
     } catch (e) {
