@@ -85,6 +85,31 @@ npx --yes pnpm@10.12.1 typecheck && npx --yes pnpm@10.12.1 lint && npx --yes pnp
 
 All four green, plus: new domain logic has a test in `tests/`, `revalidatePath` called for every mutated view, ownership enforced, dark mode checked.
 
+## Workflow (code → checks → Docker deploy → verify)
+
+The full loop for any change:
+
+1. **Code** — follow the [New-feature recipe](#new-feature-recipe). One feature per branch.
+2. **Checks** — gate on the four commands before committing:
+   ```bash
+   npx --yes pnpm@10.12.1 typecheck && npx --yes pnpm@10.12.1 lint && npx --yes pnpm@10.12.1 test && npx --yes pnpm@10.12.1 build
+   ```
+   `.env` must exist (copy from `.env.example`) for local ops.
+3. **Deploy on Docker** — build and start the whole Compose project (db + app); migrations run on boot:
+   ```bash
+   docker compose up --build -d --force-recreate
+   ```
+   Requires `POSTGRES_PASSWORD` and `AUTH_SECRET` in `.env` (any values work locally; `AUTH_SECRET` 32+ chars — `openssl rand -base64 32`). `CRON_ENABLED=false` keeps local runs quiet. Watch migrations + startup with `docker compose logs -f app`.
+4. **Verify** — wait for the server, then:
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/health   # 200 = healthy
+   ```
+   - Login at `/login` (seed demo user: `npx --yes pnpm@10.12.1 seed` → `demo@finance.local` / `demo1234`).
+   - Exercise the changed paths in the browser.
+   - Check data landed: `docker compose exec db psql -U finance -d finance -c "SELECT ..."`.
+   - Confirm no error lines: `docker compose logs --tail 50 app | grep -iE "error|throw|unhandled"`.
+   - Reset cleanly with `docker compose down -v` (drops the `pgdata` volume — re-seed after).
+
 ## MCP server (AI agent access)
 
 `POST /api/mcp` is a stateless Streamable-HTTP MCP endpoint (`src/app/api/mcp/route.ts`, tools in `src/lib/mcp/tools.ts`). Auth is a per-user API key (Bearer `skp_…`, sha256-hashed in the `api_keys` table); users create/revoke keys at `/settings` via `src/actions/api-key.actions.ts`.
