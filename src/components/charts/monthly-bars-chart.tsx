@@ -15,7 +15,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { fmtMoney } from "@/lib/utils/money";
+import { fmtMoneyCompact } from "@/lib/utils/money";
 
 export type MonthlyBarDatum = { month: string; value: number };
 
@@ -72,7 +72,7 @@ export function MonthlyBarsChart({
                   labelFormatter={(l) => String(l)}
                   formatter={(value) => (
                     <span className="font-mono font-medium tabular-nums">
-                      {fmtMoney(Number(value), currency)}
+                      {fmtMoneyCompact(Number(value), currency)}
                     </span>
                   )}
                 />

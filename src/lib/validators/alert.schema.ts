@@ -14,3 +14,7 @@ export type CreateAlertInput = z.infer<typeof createAlertSchema>;
 export const setBaseCurrencySchema = z.object({
   baseCurrency: z.enum(["USD", "THB"]),
 });
+
+export const setPlViewSchema = z.object({
+  plView: z.enum(["unrealized", "daily"]),
+});

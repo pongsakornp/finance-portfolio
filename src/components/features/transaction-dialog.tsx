@@ -2,10 +2,13 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PlusIcon, LoaderCircleIcon } from "lucide-react";
+import { LoaderCircleIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { createTransactionAction } from "@/actions/transaction.actions";
+import {
+  createTransactionAction,
+  updateTransactionAction,
+} from "@/actions/transaction.actions";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/features/date-picker";
 import {
@@ -30,29 +33,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { TxRow } from "@/lib/services/view-service";
 
 type Portfolio = { id: string; name: string };
 
-export function AddTransactionDialog({
+export function TransactionDialog({
   portfolios,
+  transaction,
   defaultPortfolioId,
 }: {
   portfolios: Portfolio[];
+  transaction?: TxRow;
   defaultPortfolioId?: string;
 }) {
+  const isEdit = !!transaction;
   const [open, setOpen] = useState(false);
-  const [assetType, setAssetType] = useState("stock");
-  const [cashCurrency, setCashCurrency] = useState("USD");
-  const [txType, setTxType] = useState("buy");
+  const [assetType, setAssetType] = useState(transaction?.asset.type ?? "stock");
+  const [cashCurrency, setCashCurrency] = useState(
+    transaction && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
+  );
+  const [txType, setTxType] = useState<"buy" | "sell" | "dividend">(transaction?.type ?? "buy");
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) {
+      // reset to the transaction's (or add) values on every open
+      setTxType(isEdit ? transaction.type : "buy");
+      setAssetType(isEdit ? transaction.asset.type : "stock");
+      setCashCurrency(
+        isEdit && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
+      );
+    }
+  }
+
   function submit(fd: FormData) {
     startTransition(async () => {
-      const res = await createTransactionAction(fd);
+      const res = isEdit
+        ? await updateTransactionAction(transaction.id, fd)
+        : await createTransactionAction(fd);
       { if (res?.error) { toast.error(res.error); return; } }
-      toast.success("Transaction saved");
+      toast.success(isEdit ? "Transaction updated" : "Transaction saved");
       setOpen(false);
       formRef.current?.reset();
       router.refresh();
@@ -67,19 +90,23 @@ export function AddTransactionDialog({
     );
   }
 
+  const trigger = isEdit ? (
+    <Button variant="ghost" size="icon" aria-label="Edit transaction">
+      <PencilIcon className="size-4" />
+    </Button>
+  ) : (
+    <Button size="sm">
+      <PlusIcon data-icon="inline-start" /> Add transaction
+    </Button>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button size="sm">
-            <PlusIcon data-icon="inline-start" /> Add transaction
-          </Button>
-        }
-      />
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={trigger} />
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto p-4 sm:p-6">
         <form ref={formRef} action={submit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>Add transaction</DialogTitle>
+            <DialogTitle>{isEdit ? "Edit transaction" : "Add transaction"}</DialogTitle>
             <DialogDescription>
               Unknown symbols are created automatically.
             </DialogDescription>
@@ -89,10 +116,14 @@ export function AddTransactionDialog({
             <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Portfolio</FieldLabel>
               <FieldContent>
-                <input type="hidden" name="portfolioId" value={defaultPortfolioId ?? portfolios[0].id} />
+                <input
+                  type="hidden"
+                  name="portfolioId"
+                  defaultValue={transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0].id}
+                />
                 <Select
                   name="portfolioPicker"
-                  defaultValue={defaultPortfolioId ?? String(portfolios[0].id)}
+                  defaultValue={transaction?.portfolioId ?? defaultPortfolioId ?? String(portfolios[0].id)}
                   onValueChange={(v) => {
                     if (!v) return;
                     const hidden = formRef.current?.elements.namedItem("portfolioId") as HTMLInputElement;
@@ -119,7 +150,7 @@ export function AddTransactionDialog({
               <FieldLabel className="text-muted-foreground">Type</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="type" value={txType} />
-                <Select defaultValue="buy" onValueChange={(v) => v && setTxType(v)}>
+                <Select defaultValue={transaction?.type ?? "buy"} onValueChange={(v) => v && setTxType(v as typeof txType)}>
                   <SelectTrigger className="w-full">
                     <SelectValue>
                       {(v) => ({ buy: "Buy", sell: "Sell", dividend: "Dividend" }[String(v)] ?? v)}
@@ -138,7 +169,7 @@ export function AddTransactionDialog({
               <FieldLabel className="text-muted-foreground">Asset class</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="assetType" value={assetType} />
-                <Select defaultValue="stock" onValueChange={(v) => v && setAssetType(v)}>
+                <Select defaultValue={transaction?.asset.type ?? "stock"} onValueChange={(v) => v && setAssetType(v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue>
                       {(v) =>
@@ -148,7 +179,7 @@ export function AddTransactionDialog({
                           crypto: "Crypto",
                           commodity: "Commodity",
                           cash: "Cash",
-                          mutualfund: "Mutual Fund (TH)",
+                          mutualfund: "Fund",
                         }[String(v)] ?? v)
                       }
                     </SelectValue>
@@ -159,7 +190,7 @@ export function AddTransactionDialog({
                     <SelectItem value="crypto">Crypto</SelectItem>
                     <SelectItem value="commodity">Commodity</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="mutualfund">Mutual Fund (TH)</SelectItem>
+                    <SelectItem value="mutualfund">Fund</SelectItem>
                   </SelectContent>
                 </Select>
               </FieldContent>
@@ -171,6 +202,7 @@ export function AddTransactionDialog({
                 <Input
                   name="symbol"
                   required
+                  defaultValue={transaction?.asset.symbol}
                   placeholder={
                     assetType === "crypto"
                       ? "BTC"
@@ -191,7 +223,7 @@ export function AddTransactionDialog({
               <Field>
                 <FieldLabel className="text-muted-foreground">Cash amount</FieldLabel>
                 <FieldContent>
-                  <Input name="quantity" type="number" step="any" min="0" required />
+                  <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
                 </FieldContent>
               </Field>
             ) : assetType === "cash" ? (
@@ -214,7 +246,7 @@ export function AddTransactionDialog({
               <Field>
                 <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
                 <FieldContent>
-                  <Input name="quantity" type="number" step="any" min="0" required />
+                  <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
                 </FieldContent>
               </Field>
             )}
@@ -226,13 +258,13 @@ export function AddTransactionDialog({
                 <Field>
                   <FieldLabel className="text-muted-foreground">Amount</FieldLabel>
                   <FieldContent>
-                    <Input name="quantity" type="number" step="any" min="0" required />
+                    <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
                   </FieldContent>
                 </Field>
                 <Field>
                   <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={0} />
+                    <Input name="fee" type="number" step="any" min="0" defaultValue={transaction?.fee ?? 0} />
                   </FieldContent>
                 </Field>
               </>
@@ -241,13 +273,13 @@ export function AddTransactionDialog({
                 <Field>
                   <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>
                   <FieldContent>
-                    <Input name="price" type="number" step="any" min="0" required />
+                    <Input name="price" type="number" step="any" min="0" required defaultValue={transaction?.price} />
                   </FieldContent>
                 </Field>
                 <Field>
                   <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={0} />
+                    <Input name="fee" type="number" step="any" min="0" defaultValue={transaction?.fee ?? 0} />
                   </FieldContent>
                 </Field>
               </>
@@ -257,15 +289,25 @@ export function AddTransactionDialog({
               <Field className="sm:col-span-2">
                 <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
                 <FieldContent>
-                  <Input name="externalId" placeholder="bitcoin (optional)" />
+                  <Input name="externalId" placeholder="bitcoin (optional)" defaultValue={transaction?.asset.externalId ?? ""} />
                 </FieldContent>
               </Field>
             )}
 
             <Field className="sm:col-span-2">
+              <FieldLabel className="text-muted-foreground">Note</FieldLabel>
+              <FieldContent>
+                <Input name="note" placeholder="Optional note" defaultValue={transaction?.note ?? ""} />
+              </FieldContent>
+            </Field>
+
+            <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Date</FieldLabel>
               <FieldContent>
-                <DatePicker name="occurredAt" />
+                <DatePicker
+                  name="occurredAt"
+                  defaultValue={transaction ? new Date(transaction.occurredAt) : new Date()}
+                />
               </FieldContent>
             </Field>
           </div>
@@ -273,7 +315,7 @@ export function AddTransactionDialog({
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending && <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />}
-              Save
+              {isEdit ? "Save changes" : "Save"}
             </Button>
           </DialogFooter>
         </form>

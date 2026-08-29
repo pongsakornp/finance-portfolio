@@ -43,6 +43,13 @@
       "when": 1787968596834,
       "tag": "0005_broken_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787977093021,
+      "tag": "0006_remarkable_wasp",
+      "breakpoints": true
     }
   ]
 }

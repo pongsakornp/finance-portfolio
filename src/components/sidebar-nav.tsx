@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 import {
   BellIcon,
   LayoutDashboardIcon,
+  LogOutIcon,
   ScrollTextIcon,
   SettingsIcon,
   Wallet2Icon,
@@ -72,6 +74,15 @@ export function SidebarFooter() {
         >
           <SettingsIcon />
           <span>Settings</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          tooltip="Sign out"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+        >
+          <LogOutIcon />
+          <span>Sign out</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>

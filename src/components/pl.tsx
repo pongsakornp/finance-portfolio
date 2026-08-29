@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { fmtMoney } from "@/lib/utils/money";
+import { fmtMoney, fmtMoneyCompact } from "@/lib/utils/money";
 
 /** Signed, colored P/L amount or percent */
 export function PL({
@@ -7,11 +7,13 @@ export function PL({
   suffix,
   currency,
   className,
+  compact,
 }: {
   value: number;
   suffix?: string;
   currency?: string;
   className?: string;
+  compact?: boolean;
 }) {
   const positive = value > 0;
   const neutral = value === 0;
@@ -24,7 +26,7 @@ export function PL({
       )}
     >
       {currency
-        ? `${positive ? "+" : ""}${fmtMoney(value, currency)}`
+        ? `${positive ? "+" : ""}${compact ? fmtMoneyCompact(value, currency) : fmtMoney(value, currency)}`
         : `${neutral ? "" : positive ? "+" : ""}${value.toLocaleString("en-US", {
             maximumFractionDigits: 2,
           })}`}

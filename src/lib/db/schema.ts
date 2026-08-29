@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   name: text("name"),
   passwordHash: text("password_hash").notNull(),
   baseCurrency: text("base_currency").notNull().default("USD"), // "USD" | "THB"
+  plView: text("pl_view").notNull().default("unrealized"), // "unrealized" | "daily"
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

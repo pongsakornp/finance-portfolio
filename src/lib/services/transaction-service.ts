@@ -95,6 +95,55 @@ export async function deleteTransaction(
   await db.delete(transactions).where(eq(transactions.id, id));
 }
 
+export async function updateTransaction(
+  userId: string,
+  id: string,
+  data: CreateTransactionInput
+): Promise<void> {
+  const [row] = await db
+    .select({ portfolioId: transactions.portfolioId })
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .limit(1);
+  if (!row) throw new Error("Not found");
+
+  // must own the transaction's current portfolio...
+  await assertOwnedPortfolio(row.portfolioId, userId);
+  // ...and the destination portfolio if the user is moving it
+  if (data.portfolioId !== row.portfolioId) {
+    await assertOwnedPortfolio(data.portfolioId, userId);
+  }
+
+  const assetId = await upsertAsset({
+    symbol: data.symbol,
+    name: data.assetName ?? "",
+    type: data.assetType,
+    currency:
+      data.assetType === "crypto"
+        ? "USD"
+        : data.assetType === "cash"
+          ? (data.assetCurrency?.toUpperCase() ?? "USD")
+          : data.assetType === "mutualfund"
+            ? "THB"
+            : undefined,
+    externalId: data.externalId,
+  });
+
+  await db
+    .update(transactions)
+    .set({
+      portfolioId: data.portfolioId,
+      assetId,
+      type: data.type,
+      quantity: String(data.quantity),
+      price: String(data.price),
+      fee: String(data.fee),
+      occurredAt: data.occurredAt,
+      note: data.note,
+    })
+    .where(eq(transactions.id, id));
+}
+
 export async function importTransactions(
   rows: ImportRow[],
   portfolioId: string,

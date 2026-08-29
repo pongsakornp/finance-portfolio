@@ -56,7 +56,7 @@ export function AlertCreateForm() {
                     etf: "ETF",
                     crypto: "Crypto",
                     commodity: "Commodity",
-                    mutualfund: "Mutual Fund (TH)",
+                    mutualfund: "Fund",
                   }[String(v)] ?? v)
                 }
               </SelectValue>
@@ -66,7 +66,7 @@ export function AlertCreateForm() {
               <SelectItem value="etf">ETF</SelectItem>
               <SelectItem value="crypto">Crypto</SelectItem>
               <SelectItem value="commodity">Commodity</SelectItem>
-              <SelectItem value="mutualfund">Mutual Fund (TH)</SelectItem>
+              <SelectItem value="mutualfund">Fund</SelectItem>
             </SelectContent>
           </Select>
         </FieldContent>

@@ -10,7 +10,7 @@ import {
 import { monthlyBreakdown, toUsdReportTxs } from "@/lib/services/report-service";
 import { requireUserId } from "@/lib/session";
 import { fmtMonthYear } from "@/lib/utils/date";
-import { typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
+import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
 import { fmtMoney, fmtQty } from "@/lib/utils/money";
 
 import { AllocationDonut } from "@/components/charts/allocation-donut";
@@ -19,6 +19,7 @@ import { MonthlyBarsChart } from "@/components/charts/monthly-bars-chart";
 import {
   HoldingsList,
 } from "@/components/features/holdings-list";
+import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
 import {
@@ -35,11 +36,12 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const userId = await requireUserId();
   const [user] = await db
-    .select({ baseCurrency: users.baseCurrency })
+    .select({ baseCurrency: users.baseCurrency, plView: users.plView })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   const baseCurrency = user?.baseCurrency ?? "USD";
+  const plView = user?.plView ?? "unrealized";
 
   const txs = await getUserTransactions(userId);
   const view = await buildHoldingsView(txs);
@@ -88,20 +90,27 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total value"
-          title={money(t.marketValue)}
+          title={<CompactMoney value={t.marketValue * rate} currency={baseCurrency} />}
           footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} />}
         />
-        <StatCard label="Cost basis" title={money(t.costBasis)} />
+        <StatCard
+          label="Cost basis"
+          title={<CompactMoney value={t.costBasis * rate} currency={baseCurrency} />}
+        />
         <StatCard
           label="Unrealized P/L"
-          title={<PL value={t.unrealizedPL * rate} currency={baseCurrency} />}
+          title={<PL value={t.unrealizedPL * rate} currency={baseCurrency} compact />}
           footer={<PLPct value={t.unrealizedPLPct} />}
           footerClassName="text-sm"
         />
         <StatCard
           label="Realized + Dividends"
           title={
-            <PL value={(t.realizedPL + t.dividendsReceived) * rate} currency={baseCurrency} />
+            <PL
+              value={(t.realizedPL + t.dividendsReceived) * rate}
+              currency={baseCurrency}
+              compact
+            />
           }
           footer={`Dividends ${money(t.dividendsReceived)}`}
         />
@@ -170,21 +179,25 @@ export default async function DashboardPage() {
             </Empty>
           ) : (
             <HoldingsList
-              items={holdings.map((h) => ({
-                id: h.asset.id,
-                symbol: h.asset.symbol,
-                name: h.asset.name,
-                type: h.asset.type,
-                typeLabel: typeLabel(h.asset.type),
-                qty: fmtQty(h.position.qty),
-                qtyLabel: typeUnitLabel(h.asset.type),
-                avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
-                price: fmtMoney(h.price, h.asset.currency),
-                value: money(h.valueUsd),
-                pl: h.position.unrealizedPL * rate,
-                plPct: h.position.unrealizedPLPct,
-                firstBuyLabel: fmtMonthYear(h.firstBuyAt),
-              }))}
+              items={holdings.map((h) => {
+                const rowPl = holdingPl(h, rate, plView);
+                return {
+                  id: h.asset.id,
+                  symbol: h.asset.symbol,
+                  name: h.asset.name,
+                  type: h.asset.type,
+                  typeLabel: typeLabel(h.asset.type),
+                  qty: fmtQty(h.position.qty),
+                  qtyLabel: typeUnitLabel(h.asset.type),
+                  avgCost: fmtMoney(h.position.avgCost, h.asset.currency),
+                  price: fmtMoney(h.price, h.asset.currency),
+                  valueNum: Math.round(h.valueUsd * rate * 100) / 100,
+                  valueCurrency: baseCurrency,
+                  pl: rowPl.pl,
+                  plPct: rowPl.plPct,
+                  firstBuyLabel: fmtMonthYear(h.firstBuyAt),
+                };
+              })}
             />
           )}
         </CardContent>

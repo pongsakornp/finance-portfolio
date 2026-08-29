@@ -9,6 +9,8 @@ import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { avatarText } from "@/lib/utils/holdings"
+import { fmtMoneyCompact } from "@/lib/utils/money"
 
 export type HoldingsListItem = {
   id: string;
@@ -20,7 +22,8 @@ export type HoldingsListItem = {
   qtyLabel: string;
   avgCost: string;
   price: string;
-  value: string;
+  valueNum: number;
+  valueCurrency: string;
   pl: number;
   plPct: number;
   firstBuyLabel: string;
@@ -89,7 +92,7 @@ export function HoldingsList({ items }: { items: HoldingsListItem[] }) {
               {i > 0 && <Separator />}
               <div className="flex items-center gap-3 p-4 sm:gap-4">
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border bg-muted/40 text-sm font-semibold">
-                  {h.symbol}
+                  {avatarText(h.symbol)}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex min-w-0 items-center gap-2">
@@ -109,7 +112,9 @@ export function HoldingsList({ items }: { items: HoldingsListItem[] }) {
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                     Value
                   </span>
-                  <span className="font-semibold tabular-nums">{h.value}</span>
+                  <span className="font-semibold tabular-nums">
+                    {fmtMoneyCompact(h.valueNum, h.valueCurrency)}
+                  </span>
                   <span className="text-xs">
                     <PL value={h.pl} /> (<PLPct value={h.plPct} />)
                   </span>
