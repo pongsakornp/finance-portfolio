@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 function normalize(points: Array<{ day: string; value: number }>) {
   if (points.length === 0) return [];
-  const base = points[0].value || 1;
+  const base = points.find((p) => p.value > 0)?.value ?? 1;
   return points.map((p) => ({
     day: p.day,
     pct: Math.round(((p.value - base) / base) * 10000) / 100,
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const days = Math.min(
     Math.max(parseInt(new URL(request.url).searchParams.get("days") ?? "90", 10) || 90, 7),
-    365
+    3650
   );
 
   try {

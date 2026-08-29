@@ -1,7 +1,8 @@
 import { inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { assets, priceCache } from "@/lib/db/schema";
+import { assets, priceCache, priceHistory } from "@/lib/db/schema";
+import { dayKey } from "@/lib/utils/date";
 
 export type Asset = typeof assets.$inferSelect;
 
@@ -92,6 +93,12 @@ async function fetchFinnomena(symbol: string): Promise<{ price: number; previous
   return { price: last, previousClose: prev, currency: "THB" };
 }
 
+/** Day key to append to the daily series, or null to skip (weekend for market-hours assets). */
+export function quoteSeriesDay(type: Asset["type"], now = new Date()): string | null {
+  if (type === "crypto") return dayKey(now);
+  return [0, 6].includes(now.getUTCDay()) ? null : dayKey(now);
+}
+
 function ttlFor(type: Asset["type"]): number {
   // crypto trades 24/7 → refresh faster than market-hours assets
   // mutual fund NAV updates once daily after market close → 6h is plenty
@@ -151,6 +158,22 @@ export async function getQuote(asset: Asset): Promise<Quote> {
           fetchedAt: new Date(),
         },
       });
+
+    // P5: keep the daily series current. Live/intraday price → source=2 (official
+    // close from ensureHistory overwrites it next day). Skip weekend rows for
+    // market-hours assets to avoid spurious points.
+    const seriesDay = quoteSeriesDay(asset.type);
+    if (seriesDay) {
+      await db
+        .insert(priceHistory)
+        .values({
+          assetId: asset.id,
+          day: seriesDay,
+          close: String(fresh.price),
+          source: 2,
+        })
+        .onConflictDoNothing();
+    }
 
     return {
       ...base,

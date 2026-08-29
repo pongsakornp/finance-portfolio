@@ -2,41 +2,9 @@ import { and, eq, isNull } from "drizzle-orm";
 import cron from "node-cron";
 
 import { db } from "@/lib/db";
-import { alerts, assets, portfolios, snapshots } from "@/lib/db/schema";
-import { benchmarkSeries } from "@/lib/services/valuation-service";
-import {
-  buildHoldingsView,
-  getUserTransactions,
-} from "@/lib/services/view-service";
-import { dayKey } from "@/lib/utils/date";
-
-async function takeSnapshots() {
-  const all = await db.select({ id: portfolios.id }).from(portfolios);
-  const today = dayKey(new Date());
-  for (const p of all) {
-    try {
-      const txs = await getUserTransactions(undefined, p.id);
-      const view = await buildHoldingsView(txs);
-      await db
-        .insert(snapshots)
-        .values({
-          portfolioId: p.id,
-          day: today,
-          valueUsd: String(view.totalsUsd.marketValue),
-          costUsd: String(view.totalsUsd.costBasis),
-        })
-        .onConflictDoUpdate({
-          target: [snapshots.portfolioId, snapshots.day],
-          set: {
-            valueUsd: String(view.totalsUsd.marketValue),
-            costUsd: String(view.totalsUsd.costBasis),
-          },
-        });
-    } catch (e) {
-      console.error(`[cron] snapshot failed for portfolio ${p.id}:`, e);
-    }
-  }
-}
+import { alerts, assets } from "@/lib/db/schema";
+import { benchmarkSeries, warmAssetHistory } from "@/lib/services/valuation-service";
+import { warmFxHistory } from "@/lib/services/fx-service";
 
 /** Refresh quote cache via alert checks and mark hit alerts as triggered. */
 async function checkAlerts() {
@@ -74,7 +42,7 @@ declare global {  var __pfCronStarted: boolean | undefined;
 /** Warm the S&P 500 benchmark cache (fills benchmark_cache). */
 async function warmBenchmark() {
   try {
-    await benchmarkSeries(365);
+    await benchmarkSeries(3650);
   } catch (e) {
     console.error("[cron] benchmark warm failed:", e);
   }
@@ -84,13 +52,24 @@ export function startCron() {
   if (globalThis.__pfCronStarted) return; // dev hot-reload guard
   globalThis.__pfCronStarted = true;
 
-  // nightly portfolio snapshot, just after UTC midnight
-  cron.schedule("5 0 * * *", () => void takeSnapshots());
+  // nightly: backfill asset price history + daily FX so reads never fetch
+  cron.schedule("5 0 * * *", () => {
+    void warmHistory();
+    void warmFxHistory();
+  });
   // hourly: keep quote cache warm + evaluate alerts + fill benchmark cache
   cron.schedule("0 * * * *", () => {
     void checkAlerts();
     void warmBenchmark();
   });
 
-  console.log("[cron] scheduled: snapshots @00:05 UTC, alerts/benchmark hourly");
+  console.log("[cron] scheduled: history/FX nightly, alerts/benchmark hourly");
+}
+
+async function warmHistory() {
+  try {
+    await warmAssetHistory();
+  } catch (e) {
+    console.error("[cron] asset history warm failed:", e);
+  }
 }

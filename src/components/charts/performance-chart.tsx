@@ -71,6 +71,8 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
     [90, "3M"],
     [180, "6M"],
     [365, "1Y"],
+    [1095, "3Y"],
+    [1825, "5Y"],
   ] as const;
 
   return (
@@ -105,7 +107,7 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
         {merged.length === 0 ? (
           <Empty className="h-full justify-center">
             <EmptyDescription>
-              Not enough history yet — add transactions or wait for snapshots
+              Not enough history yet — add transactions or wait for price history
             </EmptyDescription>
           </Empty>
         ) : (

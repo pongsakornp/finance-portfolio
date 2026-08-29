@@ -1,6 +1,6 @@
 /**
  * Runs once when the Next.js server boots (node runtime only).
- * Starts the cron scheduler: nightly snapshots + hourly alert checks.
+ * Starts the cron scheduler: nightly history/FX backfills + hourly alert checks.
  */
 export async function register() {
   if (
