@@ -10,9 +10,11 @@ import { Button } from "@/components/ui/button";
 export function DeleteButton({
   action,
   confirmText = "Are you sure?",
+  redirectTo,
 }: {
   action: () => Promise<{ ok?: boolean; error?: string }>;
   confirmText?: string;
+  redirectTo?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -30,6 +32,7 @@ export function DeleteButton({
           { if (res?.error) { toast.error(res.error); return; } }
           toast.success("Deleted");
           router.refresh();
+          if (redirectTo) router.push(redirectTo);
         });
       }}
     >

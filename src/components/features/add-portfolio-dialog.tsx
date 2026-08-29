@@ -22,7 +22,11 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 
-export function AddPortfolioDialog() {
+export function AddPortfolioDialog({
+  onCreated,
+}: {
+  onCreated?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -36,6 +40,7 @@ export function AddPortfolioDialog() {
       setOpen(false);
       formRef.current?.reset();
       router.refresh();
+      onCreated?.();
     });
   }
 

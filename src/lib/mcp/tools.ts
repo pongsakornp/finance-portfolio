@@ -37,7 +37,6 @@ function revalidateMutated() {
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   revalidatePath("/portfolios");
-  revalidatePath("/reports");
 }
 
 // z.coerce.date() can't serialize to JSON Schema (breaks tools/list) — ISO strings over the wire

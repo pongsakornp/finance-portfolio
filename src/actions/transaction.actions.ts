@@ -20,7 +20,6 @@ function revalidateAll() {
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   revalidatePath("/portfolios");
-  revalidatePath("/reports");
 }
 
 export async function createPortfolioAction(formData: FormData) {

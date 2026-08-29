@@ -1,7 +1,7 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { priceHistory } from "@/lib/db/schema";
+import { benchmarkCache, priceHistory } from "@/lib/db/schema";
 import type { Asset } from "@/lib/services/quote-service";
 import { getRate } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
@@ -18,11 +18,17 @@ type YahooHistory = {
 };
 
 async function yahooHistory(symbol: string): Promise<Map<string, number>> {
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`,
-    { headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" }, cache: "no-store" }
+  return yahooChart(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`
   );
-  if (!res.ok) throw new Error(`Yahoo history ${symbol}: HTTP ${res.status}`);
+}
+
+async function yahooChart(url: string): Promise<Map<string, number>> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Yahoo history: HTTP ${res.status}`);
   const json = (await res.json()) as YahooHistory;
   const r = json.chart.result?.[0];
   const out = new Map<string, number>();
@@ -202,11 +208,71 @@ export async function portfolioSeries(
   return points.filter((p) => p.day >= windowStart);
 }
 
+const BENCHMARK_INDEX = "%5EGSPC";
+const BENCHMARK_TTL_MS = 24 * 60 * 60 * 1000; // index updates daily
+
+/** ^GSPC closes cached in benchmark_cache with a stale fallback + query2 retry. */
+async function loadBenchmark(windowStart: string): Promise<Map<string, number>> {
+  const cached = await db
+    .select()
+    .from(benchmarkCache)
+    .where(and(eq(benchmarkCache.index, BENCHMARK_INDEX), gte(benchmarkCache.day, windowStart)))
+    .orderBy(asc(benchmarkCache.day));
+  const cachedMap = new Map<string, number>(
+    cached.map((r) => [dayKey(new Date(r.day)), parseFloat(r.close)])
+  );
+
+  const last = cached[cached.length - 1];
+  const fresh =
+    !!last &&
+    Date.now() - new Date(`${last.day}T00:00:00Z`).getTime() < BENCHMARK_TTL_MS;
+  if (fresh && cachedMap.size > 0) return cachedMap;
+
+  // fetch fresh, trying both Yahoo hosts before giving up
+  let closes: Map<string, number> | null = null;
+  for (const host of ["query1", "query2"]) {
+    try {
+      const got = await yahooChart(
+        `https://${host}.finance.yahoo.com/v8/finance/chart/${BENCHMARK_INDEX}?interval=1d&range=1y`
+      );
+      if (got.size > 0) {
+        closes = got;
+        break;
+      }
+    } catch {
+      /* try next host */
+    }
+  }
+
+  if (closes && closes.size > 0) {
+    // upsert every close so the cache stays warm
+    const values = [...closes.entries()].map(([day, close]) => ({
+      index: BENCHMARK_INDEX,
+      day,
+      close: String(close),
+    }));
+    for (const v of values) {
+      await db
+        .insert(benchmarkCache)
+        .values(v)
+        .onConflictDoUpdate({
+          target: [benchmarkCache.index, benchmarkCache.day],
+          set: { close: v.close },
+        });
+    }
+    return new Map([...cachedMap, ...closes]);
+  }
+
+  // final fallback: stale cache beats nothing
+  if (cachedMap.size > 0) return cachedMap;
+  return new Map();
+}
+
 /** S&P 500 index closes, normalized to pct-change vs first point. */
 export async function benchmarkSeries(days: number): Promise<SeriesPoint[]> {
   try {
-    const closes = await yahooHistory("%5EGSPC");
     const windowStart = dayKey(new Date(Date.now() - (days - 1) * 86400_000));
+    const closes = await loadBenchmark(windowStart);
     return [...closes.entries()]
       .filter(([day]) => day >= windowStart)
       .sort(([a], [b]) => a.localeCompare(b))

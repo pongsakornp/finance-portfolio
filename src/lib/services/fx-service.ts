@@ -52,3 +52,8 @@ export async function convert(
   const rate = await getRate(from, to);
   return d(amount).mul(rate).toDecimalPlaces(2).toNumber();
 }
+
+/** Multiplier to express USD amounts in the user's base currency (1 if USD). */
+export async function baseRate(baseCurrency: string): Promise<number> {
+  return baseCurrency === "USD" ? 1 : (await getRate("USD", baseCurrency)).toNumber();
+}

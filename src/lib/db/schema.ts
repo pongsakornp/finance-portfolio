@@ -109,6 +109,16 @@ export const priceHistory = pgTable(
   (t) => [primaryKey({ columns: [t.assetId, t.day] })]
 );
 
+export const benchmarkCache = pgTable(
+  "benchmark_cache",
+  {
+    index: text("index").notNull(),
+    day: date("day").notNull(),
+    close: numeric("close", { precision: 20, scale: 8 }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.index, t.day] })]
+);
+
 export const fxRates = pgTable("fx_rates", {
   pair: text("pair").primaryKey(), // "USD/THB"
   rate: numeric("rate", { precision: 18, scale: 8 }).notNull(),

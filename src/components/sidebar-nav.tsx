@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 
 import {
   BellIcon,
-  ChartPieIcon,
-  FileInputIcon,
   LayoutDashboardIcon,
   ScrollTextIcon,
   SettingsIcon,
@@ -27,8 +25,6 @@ const links = [
   { href: "/portfolios", label: "Portfolios", icon: WalletIcon },
   { href: "/transactions", label: "Transactions", icon: ScrollTextIcon },
   { href: "/alerts", label: "Alerts", icon: BellIcon },
-  { href: "/reports", label: "Reports", icon: ChartPieIcon },
-  { href: "/import", label: "Import / Export", icon: FileInputIcon },
 ];
 
 export function SidebarBrand() {
@@ -48,7 +44,11 @@ export function SidebarNav() {
         <SidebarMenu>
           {links.map(({ href, label, icon: Icon }) => (
             <SidebarMenuItem key={href}>
-              <SidebarMenuButton isActive={pathname.startsWith(href)} render={<Link href={href} />}>
+              <SidebarMenuButton
+                isActive={pathname.startsWith(href)}
+                tooltip={label}
+                render={<Link href={href} />}
+              >
                 <Icon />
                 <span>{label}</span>
               </SidebarMenuButton>
@@ -63,9 +63,17 @@ export function SidebarNav() {
 export function SidebarFooter() {
   const pathname = usePathname();
   return (
-    <SidebarMenuButton isActive={pathname.startsWith("/settings")} render={<Link href="/settings" />}>
-      <SettingsIcon />
-      <span>Settings</span>
-    </SidebarMenuButton>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          isActive={pathname.startsWith("/settings")}
+          tooltip="Settings"
+          render={<Link href="/settings" />}
+        >
+          <SettingsIcon />
+          <span>Settings</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }

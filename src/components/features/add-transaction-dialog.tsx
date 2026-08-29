@@ -2,11 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, LoaderCircleIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { createTransactionAction } from "@/actions/transaction.actions";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/features/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -86,7 +87,7 @@ export function AddTransactionDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field className="sm:col-span-2">
-              <FieldLabel>Portfolio</FieldLabel>
+              <FieldLabel className="text-muted-foreground">Portfolio</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="portfolioId" value={defaultPortfolioId ?? portfolios[0].id} />
                 <Select
@@ -98,7 +99,7 @@ export function AddTransactionDialog({
                     if (hidden) hidden.value = v;
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Portfolio">
                       {(v) => portfolios.find((p) => p.id === v)?.name ?? "Select"}
                     </SelectValue>
@@ -115,11 +116,11 @@ export function AddTransactionDialog({
             </Field>
 
             <Field>
-              <FieldLabel>Type</FieldLabel>
+              <FieldLabel className="text-muted-foreground">Type</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="type" value={txType} />
                 <Select defaultValue="buy" onValueChange={(v) => v && setTxType(v)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue>
                       {(v) => ({ buy: "Buy", sell: "Sell", dividend: "Dividend" }[String(v)] ?? v)}
                     </SelectValue>
@@ -134,11 +135,11 @@ export function AddTransactionDialog({
             </Field>
 
             <Field>
-              <FieldLabel>Asset class</FieldLabel>
+              <FieldLabel className="text-muted-foreground">Asset class</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="assetType" value={assetType} />
                 <Select defaultValue="stock" onValueChange={(v) => v && setAssetType(v)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue>
                       {(v) =>
                         ({
@@ -165,7 +166,7 @@ export function AddTransactionDialog({
             </Field>
 
             <Field>
-              <FieldLabel>Symbol</FieldLabel>
+              <FieldLabel className="text-muted-foreground">Symbol</FieldLabel>
               <FieldContent>
                 <Input
                   name="symbol"
@@ -186,13 +187,20 @@ export function AddTransactionDialog({
               </FieldContent>
             </Field>
 
-            {assetType === "cash" && (
+            {txType === "dividend" ? (
               <Field>
-                <FieldLabel>Currency</FieldLabel>
+                <FieldLabel className="text-muted-foreground">Cash amount</FieldLabel>
+                <FieldContent>
+                  <Input name="quantity" type="number" step="any" min="0" required />
+                </FieldContent>
+              </Field>
+            ) : assetType === "cash" ? (
+              <Field>
+                <FieldLabel className="text-muted-foreground">Currency</FieldLabel>
                 <FieldContent>
                   <input type="hidden" name="assetCurrency" value={cashCurrency} />
                   <Select defaultValue={cashCurrency} onValueChange={(v) => v && setCashCurrency(v)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -202,36 +210,27 @@ export function AddTransactionDialog({
                   </Select>
                 </FieldContent>
               </Field>
-            )}
-
-            {assetType === "crypto" && (
+            ) : (
               <Field>
-                <FieldLabel>CoinGecko ID</FieldLabel>
-                <FieldContent>
-                  <Input name="externalId" placeholder="bitcoin (optional)" />
-                </FieldContent>
-              </Field>
-            )}
-
-            {txType === "dividend" ? (
-              <Field>
-                <FieldLabel>Cash amount</FieldLabel>
+                <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
                 <FieldContent>
                   <Input name="quantity" type="number" step="any" min="0" required />
                 </FieldContent>
               </Field>
-            ) : assetType === "cash" ? (
+            )}
+
+            {txType === "dividend" ? null : assetType === "cash" ? (
               <>
                 {/* cash is priced at exactly 1 unit of its own currency */}
                 <input type="hidden" name="price" value="1" />
                 <Field>
-                  <FieldLabel>Amount</FieldLabel>
+                  <FieldLabel className="text-muted-foreground">Amount</FieldLabel>
                   <FieldContent>
                     <Input name="quantity" type="number" step="any" min="0" required />
                   </FieldContent>
                 </Field>
                 <Field>
-                  <FieldLabel>Fee</FieldLabel>
+                  <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
                     <Input name="fee" type="number" step="any" min="0" defaultValue={0} />
                   </FieldContent>
@@ -240,19 +239,13 @@ export function AddTransactionDialog({
             ) : (
               <>
                 <Field>
-                  <FieldLabel>Quantity</FieldLabel>
-                  <FieldContent>
-                    <Input name="quantity" type="number" step="any" min="0" required />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel>Price / unit</FieldLabel>
+                  <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>
                   <FieldContent>
                     <Input name="price" type="number" step="any" min="0" required />
                   </FieldContent>
                 </Field>
                 <Field>
-                  <FieldLabel>Fee</FieldLabel>
+                  <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
                     <Input name="fee" type="number" step="any" min="0" defaultValue={0} />
                   </FieldContent>
@@ -260,21 +253,26 @@ export function AddTransactionDialog({
               </>
             )}
 
-            <Field>
-              <FieldLabel>Date</FieldLabel>
+            {assetType === "crypto" && txType !== "dividend" && (
+              <Field className="sm:col-span-2">
+                <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
+                <FieldContent>
+                  <Input name="externalId" placeholder="bitcoin (optional)" />
+                </FieldContent>
+              </Field>
+            )}
+
+            <Field className="sm:col-span-2">
+              <FieldLabel className="text-muted-foreground">Date</FieldLabel>
               <FieldContent>
-                <Input
-                  name="occurredAt"
-                  type="date"
-                  required
-                  defaultValue={new Date().toISOString().slice(0, 10)}
-                />
+                <DatePicker name="occurredAt" />
               </FieldContent>
             </Field>
           </div>
 
           <DialogFooter>
             <Button type="submit" disabled={pending}>
+              {pending && <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />}
               Save
             </Button>
           </DialogFooter>

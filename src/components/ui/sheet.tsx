@@ -12,7 +12,7 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
-  return <SheetPrimitive.Trigger {...props} />
+  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
 function SheetClose({ ...props }: SheetPrimitive.Close.Props) {

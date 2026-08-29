@@ -28,6 +28,7 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
   const [showBenchmark, setShowBenchmark] = useState(true);
   const [portfolio, setPortfolio] = useState<Point[]>([]);
   const [benchmark, setBenchmark] = useState<Point[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,8 +39,11 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
           if (cancelled) return;
           setPortfolio(json.portfolio ?? []);
           setBenchmark(json.benchmark ?? []);
+          setLoading(false);
         },
-        () => {}
+        () => {
+          if (!cancelled) setLoading(false);
+        }
       );
     return () => {
       cancelled = true;
@@ -53,6 +57,9 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
       ? benchmark.find((b) => b.day === p.day)?.pct ?? null
       : null,
   }));
+
+  const benchmarkUnavailable =
+    showBenchmark && !loading && portfolio.length > 0 && benchmark.length === 0;
 
   const config: ChartConfig = {
     portfolio: { label: baseLabel, color: "var(--chart-2)" },
@@ -89,6 +96,9 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
             aria-label="Show S&P 500 benchmark"
           />
           vs S&amp;P 500
+          {benchmarkUnavailable && (
+            <span className="text-muted-foreground/80">· S&amp;P data unavailable</span>
+          )}
         </Label>
       </div>
       <div className="h-[280px]">

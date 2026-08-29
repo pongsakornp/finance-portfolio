@@ -3,6 +3,7 @@ import cron from "node-cron";
 
 import { db } from "@/lib/db";
 import { alerts, assets, portfolios, snapshots } from "@/lib/db/schema";
+import { benchmarkSeries } from "@/lib/services/valuation-service";
 import {
   buildHoldingsView,
   getUserTransactions,
@@ -70,14 +71,26 @@ async function checkAlerts() {
 declare global {  var __pfCronStarted: boolean | undefined;
 }
 
+/** Warm the S&P 500 benchmark cache (fills benchmark_cache). */
+async function warmBenchmark() {
+  try {
+    await benchmarkSeries(365);
+  } catch (e) {
+    console.error("[cron] benchmark warm failed:", e);
+  }
+}
+
 export function startCron() {
   if (globalThis.__pfCronStarted) return; // dev hot-reload guard
   globalThis.__pfCronStarted = true;
 
   // nightly portfolio snapshot, just after UTC midnight
   cron.schedule("5 0 * * *", () => void takeSnapshots());
-  // hourly: keep quote cache warm + evaluate alerts
-  cron.schedule("0 * * * *", () => void checkAlerts());
+  // hourly: keep quote cache warm + evaluate alerts + fill benchmark cache
+  cron.schedule("0 * * * *", () => {
+    void checkAlerts();
+    void warmBenchmark();
+  });
 
-  console.log("[cron] scheduled: snapshots @00:05 UTC, alerts hourly");
+  console.log("[cron] scheduled: snapshots @00:05 UTC, alerts/benchmark hourly");
 }
