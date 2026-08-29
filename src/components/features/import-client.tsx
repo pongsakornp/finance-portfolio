@@ -63,7 +63,7 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
         for (const r of result.data) {
           const at = (r.asset_type ?? r.assetType ?? "").toLowerCase().trim();
           if (!r.symbol || !at) continue;
-          const t = (r.type ?? "").toLowerCase().trim();
+          const t = (r.type ?? r.action ?? "").toLowerCase().trim();
           if (!["buy", "sell", "dividend"].includes(t)) continue;
           parsed.push({
             symbol: r.symbol.trim().toUpperCase(),

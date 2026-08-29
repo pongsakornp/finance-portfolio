@@ -369,6 +369,28 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   server.registerTool(
+    "rename_portfolio",
+    {
+      description: "Rename a portfolio (max 60 chars).",
+      inputSchema: { portfolioId: z.uuid(), name: z.string().min(1).max(60) },
+    },
+    async ({ portfolioId, name }) => {
+      try {
+        await assertOwnedPortfolio(portfolioId, userId);
+        const [updated] = await db
+          .update(portfolios)
+          .set({ name })
+          .where(eq(portfolios.id, portfolioId))
+          .returning({ id: portfolios.id, name: portfolios.name });
+        revalidateMutated();
+        return okJson(updated);
+      } catch (e) {
+        return asError(e);
+      }
+    }
+  );
+
+  server.registerTool(
     "add_transaction",
     {
       description:

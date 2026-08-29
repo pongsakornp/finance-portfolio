@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
+import { RenamePortfolioDialog } from "@/components/features/rename-portfolio-dialog";
 import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
@@ -78,6 +79,7 @@ export default async function PortfolioDetailPage({
           <h1 className="text-2xl font-semibold tracking-tight">{row.name}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <RenamePortfolioDialog id={id} initialName={row.name} />
           <DeleteButton
             action={deletePortfolioAction.bind(null, id)}
             confirmText={`Delete "${row.name}" and all its transactions?`}

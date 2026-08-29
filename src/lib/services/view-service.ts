@@ -76,12 +76,17 @@ export async function buildHoldingsView(txs: TxRow[]): Promise<HoldingsView> {
   );
 
   const entries = [...byAsset.entries()];
-  const quotes = await Promise.all(entries.map(([, list]) => getQuote(list[0].asset)));
+  // A single failing quote (offline/unmapped coin, rate-limit) must not 500
+  // the whole page — isolate each one and skip holdings with no price.
+  const quotes = await Promise.all(
+    entries.map(([, list]) => getQuote(list[0].asset).catch(() => null))
+  );
 
   const rows: HoldingRow[] = [];
   for (let i = 0; i < entries.length; i++) {
     const [, list] = entries[i];
     const quote = quotes[i];
+    if (!quote) continue; // no price → cannot value → omit this holding
     const asset = list[0].asset;
     // chronological order matters for average cost
     const sorted = [...list].sort(
