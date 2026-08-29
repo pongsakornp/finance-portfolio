@@ -90,7 +90,9 @@ async function ensureHistory(asset: Asset): Promise<void> {
   try {
     const closes =
       asset.type === "crypto"
-        ? await coingeckoHistory(asset.externalId ?? asset.symbol.toLowerCase())
+        ? asset.externalId
+          ? await coingeckoHistory(asset.externalId)
+          : await yahooHistory(`${asset.symbol}-USD`)
         : asset.type === "mutualfund"
           ? await finnomenaHistory(asset.symbol)
           : await yahooHistory(asset.symbol);

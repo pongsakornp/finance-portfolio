@@ -2,7 +2,6 @@ import { inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, priceCache, priceHistory } from "@/lib/db/schema";
-import { resolveCoinId } from "@/lib/services/coin-map";
 import { dayKey } from "@/lib/utils/date";
 
 export type Asset = typeof assets.$inferSelect;
@@ -138,7 +137,9 @@ export async function getQuote(asset: Asset): Promise<Quote> {
   try {
     const fresh =
       asset.type === "crypto"
-        ? await fetchCoinGecko(resolveCoinId(asset.symbol, asset.externalId) ?? asset.externalId ?? asset.symbol.toLowerCase())
+        ? asset.externalId
+          ? await fetchCoinGecko(asset.externalId)
+          : await fetchYahoo(`${asset.symbol}-USD`)
         : asset.type === "mutualfund"
           ? await fetchFinnomena(asset.symbol)
           : await fetchYahoo(asset.symbol);

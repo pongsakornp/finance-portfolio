@@ -1,9 +1,8 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { assets, portfolios, transactions } from "@/lib/db/schema";
+import { assets, portfolios, priceCache, transactions } from "@/lib/db/schema";
 import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
-import { resolveCoinId } from "@/lib/services/coin-map";
 import {
   ASSET_TYPES,
   createTransactionSchema,
@@ -30,7 +29,7 @@ export type ImportRow = {
 /** find-or-create by (symbol, type) — asset rows are shared across users */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   const [existing] = await db
-    .select({ id: assets.id, currency: assets.currency })
+    .select({ id: assets.id, currency: assets.currency, externalId: assets.externalId })
     .from(assets)
     .where(and(eq(assets.symbol, input.symbol), eq(assets.type, input.type)))
     .limit(1);
@@ -39,6 +38,13 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
     // matches on symbol+type only, so a currency change would otherwise be silently lost)
     if (input.currency && existing.currency !== input.currency) {
       await db.update(assets).set({ currency: input.currency }).where(eq(assets.id, existing.id));
+    }
+    // persist an explicit CoinGecko id (the crypto pricing source) — the id is not part
+    // of the find-or-create key, so without this an edit would be silently dropped.
+    // Flush the cached quote so the new id takes effect immediately (bypasses the TTL).
+    if (input.externalId && existing.externalId !== input.externalId) {
+      await db.update(assets).set({ externalId: input.externalId }).where(eq(assets.id, existing.id));
+      await db.delete(priceCache).where(eq(priceCache.assetId, existing.id));
     }
     return existing.id;
   }
@@ -50,9 +56,7 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
       name: input.name || input.symbol,
       type: input.type,
       currency: input.currency?.toUpperCase() ?? "USD",
-      externalId:
-        input.externalId ??
-        (input.type === "crypto" ? resolveCoinId(input.symbol) ?? input.symbol.toLowerCase() : null),
+      externalId: input.externalId ?? null,
     })
     .returning({ id: assets.id });
   return created.id;

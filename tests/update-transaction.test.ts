@@ -6,7 +6,7 @@ const assertOwnedPortfolio = vi.hoisted(() =>
 
 vi.mock("@/lib/services/portfolio-service", () => ({ assertOwnedPortfolio }));
 
-vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn() } }));
+vi.mock("@/lib/db", () => ({ db: { select: vi.fn(), update: vi.fn(), delete: vi.fn() } }));
 
 import { db } from "@/lib/db";
 import { updateTransaction, upsertAsset } from "@/lib/services/transaction-service";
@@ -64,6 +64,34 @@ describe("upsertAsset", () => {
     ).resolves.toBe("asset-1");
 
     expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("persists a new CoinGecko id on an existing crypto asset and flushes its cached quote", async () => {
+    selectResolves([{ id: "asset-1", currency: "USD", externalId: "bitcoin" }]);
+    const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+    vi.mocked(db.update).mockImplementation(() => ({ set } as never));
+    const del = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(db.delete).mockImplementation(() => ({ where: del } as never));
+
+    await expect(
+      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin-cash" })
+    ).resolves.toBe("asset-1");
+
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ externalId: "bitcoin-cash" }));
+    expect(del).toHaveBeenCalled();
+  });
+
+  it("does not touch externalId or the cache when the id is unchanged", async () => {
+    selectResolves([{ id: "asset-1", currency: "USD", externalId: "bitcoin" }]);
+    vi.mocked(db.update).mockClear();
+    vi.mocked(db.delete).mockClear();
+
+    await expect(
+      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin" })
+    ).resolves.toBe("asset-1");
+
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
   });
 });
 
