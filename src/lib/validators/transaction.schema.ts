@@ -9,6 +9,8 @@ export const ASSET_TYPES = [
   "mutualfund",
 ] as const;
 
+export const MARKETS = ["US", "SET"] as const;
+
 export const upsertAssetSchema = z.object({
   symbol: z
     .string()
@@ -18,6 +20,7 @@ export const upsertAssetSchema = z.object({
   name: z.string().min(1).max(80),
   type: z.enum(ASSET_TYPES),
   currency: z.string().length(3).default("USD"),
+  market: z.enum(MARKETS).default("US"),
   externalId: z.string().max(60).optional(),
 });
 
@@ -33,6 +36,7 @@ export const transactionObjectSchema = z.object({
   externalId: z.string().max(60).optional(),
   // only used for cash assets (crypto forces USD, stock/ETF auto-detects)
   assetCurrency: z.string().length(3).optional(),
+  market: z.enum(MARKETS).optional(),
   type: z.enum(["buy", "sell", "dividend"]),
   quantity: z.coerce.number().positive("Must be > 0"),
   price: z.coerce.number().nonnegative("Must be >= 0"),

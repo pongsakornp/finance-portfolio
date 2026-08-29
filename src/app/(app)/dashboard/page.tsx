@@ -91,7 +91,7 @@ export default async function DashboardPage() {
         <StatCard
           label="Total value"
           title={<CompactMoney value={t.marketValue * rate} currency={baseCurrency} />}
-          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} />}
+          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} currency={baseCurrency} />}
         />
         <StatCard
           label="Cost basis"

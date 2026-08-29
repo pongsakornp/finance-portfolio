@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TxRow } from "@/lib/services/view-service";
+import { padDecimals } from "@/lib/utils/money";
 
 type Portfolio = { id: string; name: string };
 
@@ -49,6 +50,7 @@ export function TransactionDialog({
   const isEdit = !!transaction;
   const [open, setOpen] = useState(false);
   const [assetType, setAssetType] = useState(transaction?.asset.type ?? "stock");
+  const [market, setMarket] = useState<"US" | "SET">(transaction?.asset.market ?? "US");
   const [cashCurrency, setCashCurrency] = useState(
     transaction && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
   );
@@ -63,6 +65,7 @@ export function TransactionDialog({
       // reset to the transaction's (or add) values on every open
       setTxType(isEdit ? transaction.type : "buy");
       setAssetType(isEdit ? transaction.asset.type : "stock");
+      setMarket(isEdit ? transaction.asset.market : "US");
       setCashCurrency(
         isEdit && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
       );
@@ -196,6 +199,26 @@ export function TransactionDialog({
               </FieldContent>
             </Field>
 
+            {assetType !== "crypto" && assetType !== "cash" && (
+              <Field>
+                <FieldLabel className="text-muted-foreground">Market</FieldLabel>
+                <FieldContent>
+                  <input type="hidden" name="market" value={market} />
+                  <Select value={market} onValueChange={(v) => v && setMarket(v as "US" | "SET")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {(v) => ({ US: "US", SET: "SET (Thailand)" }[String(v)] ?? v)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="US">US</SelectItem>
+                      <SelectItem value="SET">SET (Thailand)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FieldContent>
+              </Field>
+            )}
+
             <Field>
               <FieldLabel className="text-muted-foreground">
                 {assetType === "cash" ? "Bank name" : "Symbol"}
@@ -220,6 +243,15 @@ export function TransactionDialog({
                 />
               </FieldContent>
             </Field>
+
+            {assetType === "crypto" && txType !== "dividend" && (
+              <Field>
+                <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
+                <FieldContent>
+                  <Input name="externalId" placeholder="bitcoin (optional)" defaultValue={transaction?.asset.externalId ?? ""} />
+                </FieldContent>
+              </Field>
+            )}
 
             {txType === "dividend" ? (
               <Field>
@@ -266,7 +298,7 @@ export function TransactionDialog({
                 <Field>
                   <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={transaction?.fee ?? 0} />
+                    <Input name="fee" type="number" step="any" min="0" defaultValue={padDecimals(transaction?.fee, 4)} />
                   </FieldContent>
                 </Field>
               </>
@@ -275,41 +307,32 @@ export function TransactionDialog({
                 <Field>
                   <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>
                   <FieldContent>
-                    <Input name="price" type="number" step="any" min="0" required defaultValue={transaction?.price} />
+                    <Input name="price" type="number" step="any" min="0" required defaultValue={padDecimals(transaction?.price)} />
                   </FieldContent>
                 </Field>
                 <Field>
                   <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
                   <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={transaction?.fee ?? 0} />
+                    <Input name="fee" type="number" step="any" min="0" defaultValue={padDecimals(transaction?.fee, 4)} />
                   </FieldContent>
                 </Field>
               </>
             )}
 
-            {assetType === "crypto" && txType !== "dividend" && (
-              <Field className="sm:col-span-2">
-                <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
-                <FieldContent>
-                  <Input name="externalId" placeholder="bitcoin (optional)" defaultValue={transaction?.asset.externalId ?? ""} />
-                </FieldContent>
-              </Field>
-            )}
-
-            <Field className="sm:col-span-2">
-              <FieldLabel className="text-muted-foreground">Note</FieldLabel>
-              <FieldContent>
-                <Input name="note" placeholder="Optional note" defaultValue={transaction?.note ?? ""} />
-              </FieldContent>
-            </Field>
-
-            <Field className="sm:col-span-2">
+            <Field>
               <FieldLabel className="text-muted-foreground">Date</FieldLabel>
               <FieldContent>
                 <DatePicker
                   name="occurredAt"
                   defaultValue={transaction ? new Date(transaction.occurredAt) : new Date()}
                 />
+              </FieldContent>
+            </Field>
+
+            <Field className="sm:col-span-2">
+              <FieldLabel className="text-muted-foreground">Note</FieldLabel>
+              <FieldContent>
+                <Input name="note" placeholder="Optional note" defaultValue={transaction?.note ?? ""} />
               </FieldContent>
             </Field>
           </div>

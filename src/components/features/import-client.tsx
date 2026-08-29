@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { toast } from "sonner";
 
-import { ASSET_TYPES } from "@/lib/validators/transaction.schema";
-import { importTransactionsAction } from "@/actions/transaction.actions";
+import { MARKETS, ASSET_TYPES } from "@/lib/validators/transaction.schema";import { importTransactionsAction } from "@/actions/transaction.actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -36,16 +35,17 @@ type ParsedRow = {
   fee: number;
   occurredAt: string;
   currency?: string; // cash only
+  market?: (typeof MARKETS)[number];
   note?: string;
 };
 
-const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency
-AAPL,,stock,buy,10,150.25,1.99,2025-06-01,
-BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15,
-XAUUSD=X,Gold,commodity,buy,1,2400,0,2025-08-01,
-USD,Cash (USD),cash,buy,5000,1,0,2025-08-10,USD
-THB,Cash (THB),cash,buy,150000,1,0,2025-08-10,THB
-PTT.BK,,stock,dividend,500,0,0,2025-08-20,`;
+const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency,market
+AAPL,,stock,buy,10,150.25,1.99,2025-06-01,,US
+BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15,,US
+XAUUSD=X,Gold,commodity,buy,1,2400,0,2025-08-01,,US
+USD,Cash (USD),cash,buy,5000,1,0,2025-08-10,USD,
+THB,Cash (THB),cash,buy,150000,1,0,2025-08-10,THB,
+PTT.BK,,stock,buy,100,40.5,5,2025-08-20,,SET`;
 
 export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; name: string }> }) {
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -77,6 +77,9 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
             fee: parseFloat(r.fee ?? "0") || 0,
             occurredAt: (r.date ?? r.occurred_at ?? "").trim(),
             currency: r.currency?.trim().toUpperCase() || undefined,
+            market: MARKETS.includes(r.market?.trim().toUpperCase() as (typeof MARKETS)[number])
+              ? (r.market.trim().toUpperCase() as (typeof MARKETS)[number])
+              : undefined,
             note: r.note?.trim() || undefined,
           });
         }

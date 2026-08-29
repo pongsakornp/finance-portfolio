@@ -63,7 +63,7 @@ export function ApiKeysCard({ keys }: { keys: ApiKeyRow[] }) {
       <CardHeader>
         <CardTitle className="text-base">API keys (MCP access)</CardTitle>
         <CardDescription>
-          Let AI agents manage this portfolio over MCP at <code>/api/mcp</code>{" "}
+          Let AI agents manage this portfolio over MCP at <code>/mcp</code>{" "}
           (Bearer auth). Keys grant full read/write access to your data.
         </CardDescription>
       </CardHeader>

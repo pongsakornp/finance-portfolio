@@ -32,7 +32,7 @@ function tx(id: string, symbol: string, assetType: string, currency: string) {
     occurredAt: new Date("2026-01-01"),
     note: null,
     createdAt: new Date("2026-01-01"),
-    asset: { id, symbol, name: symbol, type: assetType as never, currency, externalId: null, createdAt: new Date("2026-01-01") },
+    asset: { id, symbol, name: symbol, type: assetType as never, currency, market: (symbol.endsWith(".BK") ? "SET" : "US") as "US" | "SET", externalId: null, createdAt: new Date("2026-01-01") },
   };
 }
 

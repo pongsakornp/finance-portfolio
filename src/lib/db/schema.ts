@@ -21,6 +21,7 @@ export const assetTypeEnum = pgEnum("asset_type", [
   "cash",
   "mutualfund",
 ]);
+export const marketEnum = pgEnum("asset_market", ["US", "SET"]);
 export const txTypeEnum = pgEnum("tx_type", ["buy", "sell", "dividend"]);
 export const alertDirectionEnum = pgEnum("alert_direction", ["above", "below"]);
 
@@ -55,6 +56,7 @@ export const assets = pgTable(
     name: text("name").notNull(),
     type: assetTypeEnum("type").notNull(),
     currency: text("currency").notNull().default("USD"),
+    market: marketEnum("market").notNull().default("US"), // US | SET (Stock Exchange of Thailand)
     externalId: text("external_id"), // CoinGecko id (crypto only), e.g. "bitcoin"
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

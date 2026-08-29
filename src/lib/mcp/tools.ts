@@ -46,7 +46,6 @@ function revalidateMutated() {
 const mcpTxObjectSchema = transactionObjectSchema.extend({
   occurredAt: z.iso.datetime(),
 });
-
 const mcpTxSchema = mcpTxObjectSchema.refine(
   (data) => data.type === "dividend" || data.price > 0,
   { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
@@ -288,9 +287,10 @@ export function buildMcpServer(userId: string): McpServer {
       inputSchema: {
         symbol: z.string().min(1).max(20),
         assetType: z.enum(ASSET_TYPES).optional(),
+        assetMarket: z.enum(["US", "SET"]).optional(),
       },
     },
-    async ({ symbol, assetType }) => {
+    async ({ symbol, assetType, assetMarket }) => {
       try {
         let [asset] = await db
           .select()
@@ -307,6 +307,7 @@ export function buildMcpServer(userId: string): McpServer {
             symbol: symbol.toUpperCase(),
             name: symbol.toUpperCase(),
             type: assetType ?? "stock",
+            market: assetMarket ?? (symbol.toUpperCase().endsWith(".BK") ? "SET" : "US"),
           });
           [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
         }
@@ -528,13 +529,14 @@ export function buildMcpServer(userId: string): McpServer {
       description: "Create a price alert: notify when price goes above/below a threshold.",
       inputSchema: createAlertSchema.shape,
     },
-    async ({ symbol, assetType, direction, threshold }) => {
+    async ({ symbol, assetType, market, direction, threshold }) => {
       try {
         const assetId = await upsertAsset({
           symbol,
           name: "",
           type: assetType,
           currency: assetType === "crypto" ? "USD" : undefined,
+          market,
         });
         const [created] = await db
           .insert(alerts)

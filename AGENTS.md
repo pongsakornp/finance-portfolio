@@ -112,7 +112,7 @@ The full loop for any change:
 
 ## MCP server (AI agent access)
 
-`POST /api/mcp` is a stateless Streamable-HTTP MCP endpoint (`src/app/api/mcp/route.ts`, tools in `src/lib/mcp/tools.ts`). Auth is a per-user API key (Bearer `skp_…`, sha256-hashed in the `api_keys` table); users create/revoke keys at `/settings` via `src/actions/api-key.actions.ts`.
+`POST /mcp` is a stateless Streamable-HTTP MCP endpoint (`src/app/mcp/route.ts`, tools in `src/lib/mcp/tools.ts`). Auth is a per-user API key (Bearer `skp_…`, sha256-hashed in the `api_keys` table); users create/revoke keys at `/settings` via `src/actions/api-key.actions.ts`.
 
 Rules:
 
@@ -126,7 +126,7 @@ Rules:
   "mcpServers": {
     "portfolio": {
       "type": "http",
-      "url": "https://<host>/api/mcp",
+      "url": "https://<host>/mcp",
       "headers": { "Authorization": "Bearer skp_..." }
     }
   }

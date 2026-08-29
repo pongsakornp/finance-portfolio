@@ -15,6 +15,7 @@ export async function createAlertAction(formData: FormData) {
   const parsed = createAlertSchema.safeParse({
     symbol: formData.get("symbol"),
     assetType: formData.get("assetType"),
+    market: (formData.get("market") as "US" | "SET") || undefined,
     direction: formData.get("direction"),
     threshold: formData.get("threshold"),
   });
@@ -28,6 +29,7 @@ export async function createAlertAction(formData: FormData) {
       name: "",
       type: d.assetType,
       currency: d.assetType === "crypto" ? "USD" : undefined,
+      market: d.market ?? (d.symbol.endsWith(".BK") ? "SET" : "US"),
     });
     await db.insert(alerts).values({
       userId,
