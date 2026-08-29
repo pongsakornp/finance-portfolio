@@ -96,6 +96,16 @@ async function fetchFinnomena(symbol: string): Promise<{ price: number; previous
   return { price: last, previousClose: prev, currency: "THB" };
 }
 
+/**
+ * SET (Thai) assets: Finnomena's fund NAV feed covers Thai ETFs/funds but not
+ * individual stocks, so it must be tried first with the bare code and fall back
+ * to Yahoo with `.BK` appended. Both return THB.
+ */
+async function fetchSet(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+  const bare = symbol.replace(/\.BK$/, ""); // PTT.BK → PTT, TDEX → TDEX
+  return fetchFinnomena(bare).catch(() => fetchYahoo(`${bare}.BK`));
+}
+
 /** Day key to append to the daily series, or null to skip (weekend for market-hours assets). */
 export function quoteSeriesDay(type: Asset["type"], now = new Date()): string | null {
   if (type === "crypto") return dayKey(now);
@@ -142,7 +152,9 @@ export async function getQuote(asset: Asset): Promise<Quote> {
           : await fetchYahoo(`${asset.symbol}-USD`)
         : asset.type === "mutualfund"
           ? await fetchFinnomena(asset.symbol)
-          : await fetchYahoo(asset.symbol);
+          : asset.market === "SET"
+            ? await fetchSet(asset.symbol)
+            : await fetchYahoo(asset.symbol);
 
     await db
       .insert(priceCache)

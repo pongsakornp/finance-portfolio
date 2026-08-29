@@ -50,4 +50,24 @@ describe("createTransactionSchema", () => {
       expect(res.data.symbol).toBe("AAPL");
     }
   });
+
+  it("accepts an optional market value", () => {
+    const res = createTransactionSchema.safeParse({
+      ...base,
+      type: "buy",
+      price: 150,
+      market: "SET",
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects an unknown market value", () => {
+    const res = createTransactionSchema.safeParse({
+      ...base,
+      type: "buy",
+      price: 150,
+      market: "SGP",
+    });
+    expect(res.success).toBe(false);
+  });
 });

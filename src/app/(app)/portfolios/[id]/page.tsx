@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
+import { TransactionDialog } from "@/components/features/transaction-dialog";
 import { RenamePortfolioDialog } from "@/components/features/rename-portfolio-dialog";
 import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
@@ -29,6 +30,7 @@ import { db } from "@/lib/db";
 import { portfolios, users } from "@/lib/db/schema";
 import {
   buildHoldingsView,
+  getUserPortfolios,
   getUserTransactions,
 } from "@/lib/services/view-service";
 import { baseRate } from "@/lib/services/fx-service";
@@ -55,8 +57,9 @@ export default async function PortfolioDetailPage({
     .limit(1);
   if (!row) notFound();
 
-  const [txs, [user]] = await Promise.all([
+  const [txs, portfoliosList, [user]] = await Promise.all([
     getUserTransactions(userId, id),
+    getUserPortfolios(userId),
     db
       .select({ baseCurrency: users.baseCurrency, plView: users.plView })
       .from(users)
@@ -92,7 +95,7 @@ export default async function PortfolioDetailPage({
         <StatCard
           label="Total value"
           title={<CompactMoney value={t.marketValue * rate} currency={baseCurrency} />}
-          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} />}
+          footer={<TodayFooter dayChange={t.dayChange} dayChangePct={t.dayChangePct} rate={rate} currency={baseCurrency} />}
         />
         <StatCard
           label="Cost basis"
@@ -193,7 +196,10 @@ export default async function PortfolioDetailPage({
                           {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
                         </TableCell>
                         <TableCell>
-                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                          <div className="flex justify-end gap-1">
+                            <TransactionDialog portfolios={portfoliosList} transaction={tx} />
+                            <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -231,7 +237,10 @@ export default async function PortfolioDetailPage({
                             </span>
                           )}
                         </div>
-                        <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        <div className="flex items-center justify-end gap-1">
+                          <TransactionDialog portfolios={portfoliosList} transaction={tx} />
+                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

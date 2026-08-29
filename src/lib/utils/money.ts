@@ -60,6 +60,12 @@ export function fmtQty(value: number): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(value);
 }
 
+/** Pad a numeric string / number to exactly `dp` decimals. */
+export function padDecimals(v: string | number | null | undefined, dp = 4): string {
+  if (v === null || v === undefined) return "0";
+  return Decimal(v ?? 0).toFixed(dp);
+}
+
 export function fmtPct(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;

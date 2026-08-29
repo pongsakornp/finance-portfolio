@@ -24,7 +24,7 @@ export const authConfig = {
         path.startsWith("/api/auth") ||
         path.startsWith("/api/health") ||
         // MCP endpoint authenticates itself via Bearer API key
-        path.startsWith("/api/mcp");
+        path.startsWith("/mcp");
 
       if (!isPublic) return isLoggedIn;
       if (isLoggedIn && (path === "/login" || path === "/register")) {

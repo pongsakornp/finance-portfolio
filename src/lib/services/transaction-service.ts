@@ -22,6 +22,7 @@ export type ImportRow = {
   occurredAt: string; // ISO date
   currency?: string; // cash only (legacy/CSV alias)
   assetCurrency?: string; // cash only
+  market?: "US" | "SET";
   note?: string;
   externalId?: string;
 };
@@ -29,7 +30,7 @@ export type ImportRow = {
 /** find-or-create by (symbol, type) — asset rows are shared across users */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   const [existing] = await db
-    .select({ id: assets.id, currency: assets.currency, externalId: assets.externalId })
+    .select({ id: assets.id, currency: assets.currency, market: assets.market, externalId: assets.externalId })
     .from(assets)
     .where(and(eq(assets.symbol, input.symbol), eq(assets.type, input.type)))
     .limit(1);
@@ -38,6 +39,11 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
     // matches on symbol+type only, so a currency change would otherwise be silently lost)
     if (input.currency && existing.currency !== input.currency) {
       await db.update(assets).set({ currency: input.currency }).where(eq(assets.id, existing.id));
+    }
+    // keep the asset's market current (same find-or-create caveat) — SET assets must
+    // be fetched Finnomena-first and valued as THB.
+    if (input.market && existing.market !== input.market) {
+      await db.update(assets).set({ market: input.market }).where(eq(assets.id, existing.id));
     }
     // persist an explicit CoinGecko id (the crypto pricing source) — the id is not part
     // of the find-or-create key, so without this an edit would be silently dropped.
@@ -56,6 +62,7 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
       name: input.name || input.symbol,
       type: input.type,
       currency: input.currency?.toUpperCase() ?? "USD",
+      market: input.market ?? "US",
       externalId: input.externalId ?? null,
     })
     .returning({ id: assets.id });
@@ -77,8 +84,11 @@ export async function createTransaction(
         : data.assetType === "cash"
           ? (data.assetCurrency?.toUpperCase() ?? "USD")
           : data.assetType === "mutualfund"
-            ? "THB" // Finnomena NAV is always THB
-            : undefined, // stock/ETF/commodity currency auto-detected on first quote fetch
+            ? "THB"
+            : data.market === "SET"
+              ? "THB" // SET assets are Baht-denominated
+              : undefined, // stock/ETF/commodity currency auto-detected on first quote fetch
+    market: data.market ?? "US",
     externalId: data.externalId,
   });
 
@@ -141,7 +151,10 @@ export async function updateTransaction(
           ? (data.assetCurrency?.toUpperCase() ?? "USD")
           : data.assetType === "mutualfund"
             ? "THB"
-            : undefined,
+            : data.market === "SET"
+              ? "THB"
+              : undefined,
+    market: data.market ?? "US",
     externalId: data.externalId,
   });
 
@@ -194,7 +207,10 @@ export async function importTransactions(
             ? (d.assetCurrency?.toUpperCase() ?? "USD")
             : d.assetType === "mutualfund"
               ? "THB"
-              : undefined,
+              : d.market === "SET"
+                ? "THB"
+                : undefined,
+      market: d.market ?? "US",
       externalId: d.externalId,
     });
     await db.insert(transactions).values({

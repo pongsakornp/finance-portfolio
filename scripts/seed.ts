@@ -17,7 +17,10 @@ async function upsertAsset(a: typeof assets.$inferInsert) {
     .from(assets)
     .where(eq(assets.symbol, a.symbol))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    await db.update(assets).set({ market: a.market, currency: a.currency }).where(eq(assets.id, existing.id));
+    return existing.id;
+  }
   const [created] = await db.insert(assets).values(a).returning({ id: assets.id });
   return created.id;
 }
@@ -52,7 +55,7 @@ async function main() {
     spy: await upsertAsset({ symbol: "SPY", name: "SPDR S&P 500 ETF", type: "etf", currency: "USD" }),
     btc: await upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD", externalId: "bitcoin" }),
     eth: await upsertAsset({ symbol: "ETH", name: "Ethereum", type: "crypto", currency: "USD", externalId: "ethereum" }),
-    ptt: await upsertAsset({ symbol: "PTT.BK", name: "PTT PCL", type: "stock", currency: "THB" }),
+    ptt: await upsertAsset({ symbol: "PTT.BK", name: "PTT PCL", type: "stock", currency: "THB", market: "SET" }),
     bequity: await upsertAsset({
       symbol: "B-EQUITY",
       name: "กองทุนเปิดบัวหลวงหุ้นทุน",
