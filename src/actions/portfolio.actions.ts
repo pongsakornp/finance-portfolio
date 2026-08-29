@@ -27,3 +27,17 @@ export async function deletePortfolioAction(id: string) {
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+export async function renamePortfolioAction(id: string, formData: FormData) {
+  const userId = await requireUserId();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name || name.length > 60) return { error: "Name required (max 60)" };
+
+  await db
+    .update(portfolios)
+    .set({ name })
+    .where(and(eq(portfolios.id, id), eq(portfolios.userId, userId)));
+  revalidatePath("/portfolios");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
