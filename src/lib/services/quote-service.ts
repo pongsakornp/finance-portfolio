@@ -97,13 +97,56 @@ async function fetchFinnomena(symbol: string): Promise<{ price: number; previous
 }
 
 /**
- * SET (Thai) assets: Finnomena's fund NAV feed covers Thai ETFs/funds but not
- * individual stocks, so it must be tried first with the bare code and fall back
- * to Yahoo with `.BK` appended. Both return THB.
+ * Yahoo symbol for a SET-listed security: strip a `.BK` suffix, re-append it.
+ * Accepts both `ASK` and `ASK.BK` → `ASK.BK`.
+ */
+export function setYahooSymbol(symbol: string): string {
+  return `${symbol.replace(/\.BK$/, "")}.BK`;
+}
+
+type FinnomenaStock = {
+  status?: boolean;
+  data?: {
+    price?: string | number;
+    currency?: string;
+    perf_1d?: string | number | null;
+    perf_p_1d?: string | number | null;
+  };
+};
+
+/**
+ * SET (Thai) listed share/ETF quote from Finnomena's public market-info API.
+ * Bare symbol (no `.BK`). `price` + `perf_1d` (day change) derive previousClose.
+ * ponytail: undocumented endpoint, may change without notice; Yahoo fallback + stale cache cover outages.
+ */
+async function fetchFinnomenaStock(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+  const res = await fetch(
+    `https://www.finnomena.com/market-info/api/public/stock/quote/${encodeURIComponent(symbol)}`,
+    { headers: { Accept: "application/json" }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Finnomena ${symbol}: HTTP ${res.status}`);
+  const json = (await res.json()) as FinnomenaStock;
+  const price = json.data?.price != null ? parseFloat(String(json.data.price)) : NaN;
+  if (!Number.isFinite(price)) throw new Error(`Finnomena ${symbol}: no price`);
+  const perf1d = json.data?.perf_1d != null ? parseFloat(String(json.data.perf_1d)) : null;
+  const perfP1d = json.data?.perf_p_1d != null ? parseFloat(String(json.data.perf_p_1d)) : null;
+  const previousClose =
+    perf1d != null && Number.isFinite(perf1d)
+      ? price - perf1d
+      : perfP1d != null && Number.isFinite(perfP1d) && perfP1d !== -100
+        ? price / (1 + perfP1d / 100)
+        : null;
+  return { price, previousClose, currency: json.data?.currency ?? "THB" };
+}
+
+/**
+ * SET (Thai) listed shares/ETFs: Finnomena's share feed first, Yahoo `.BK` fallback.
+ * Open-end Thai mutual funds (no exchange listing) are priced separately via
+ * Finnomena — that path lives in the `mutualfund` branch, not here. Both return THB.
  */
 async function fetchSet(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
-  const bare = symbol.replace(/\.BK$/, ""); // PTT.BK → PTT, TDEX → TDEX
-  return fetchFinnomena(bare).catch(() => fetchYahoo(`${bare}.BK`));
+  const bare = symbol.replace(/\.BK$/, "");
+  return fetchFinnomenaStock(bare).catch(() => fetchYahoo(setYahooSymbol(symbol)));
 }
 
 /** Day key to append to the daily series, or null to skip (weekend for market-hours assets). */

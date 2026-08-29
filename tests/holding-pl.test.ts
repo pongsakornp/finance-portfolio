@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { avatarText, holdingPl } from "@/lib/utils/holdings";
 
 const row = {
-  price: 769.35,
-  previousClose: 755.0,
-  position: { qty: 15, unrealizedPL: 5380.2, unrealizedPLPct: 87.34 },
+  unrealizedPlUsd: 5380.2,
+  dayChangeUsd: (769.35 - 755.0) * 15,
+  unrealizedPLPct: 87.34,
+  dayChangePct: ((769.35 - 755.0) / 755.0) * 100,
 };
 
 describe("holdingPl", () => {
@@ -26,10 +27,27 @@ describe("holdingPl", () => {
     expect(r.pl).toBeCloseTo((769.35 - 755.0) * 15 * 30);
   });
 
-  it("falls back to 0 when previousClose is missing", () => {
-    const r = holdingPl({ ...row, previousClose: null }, 1, "daily");
+  it("is zero for daily when dayChangeUsd is zero", () => {
+    const r = holdingPl(
+      { ...row, dayChangeUsd: 0, dayChangePct: 0 },
+      30,
+      "daily"
+    );
     expect(r.pl).toBe(0);
     expect(r.plPct).toBe(0);
+  });
+
+  it("does not inflate a THB asset (native P/L is USD-space, not re-multiplied)", () => {
+    // 10,000 × ฿10.90 = ฿109,000 market value; 10,000 × ฿28.55 = ฿285,500 cost
+    // native→USD 0.03 → valueUsd 3270, costUsd 8565, unrealizedPlUsd -5295 USD
+    const r = holdingPl(
+      { unrealizedPlUsd: -5295, dayChangeUsd: 0, unrealizedPLPct: -61.82, dayChangePct: 0 },
+      33, // THB per USD
+      "unrealized"
+    );
+    // base P/L = USD × THB/USD ≈ native THB loss (×33 once, not ×33²)
+    expect(r.pl).toBeCloseTo(-174735);
+    expect(r.plPct).toBeCloseTo(-61.82);
   });
 });
 

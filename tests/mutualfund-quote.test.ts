@@ -72,33 +72,68 @@ describe("mutual fund quotes (Finnomena NAV)", () => {
   });
 });
 
-describe("SET market quotes (Finnomena-first, Yahoo fallback)", () => {
+describe("SET market quotes (Finnomena share feed, Yahoo .BK fallback)", () => {
   afterEach(cleanup);
 
-  it("uses Finnomena NAV when the bare SET code resolves (ETFs/funds)", async () => {
+  it("quotes a SET stock from Finnomena's share feed and derives previousClose", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
         ok: true,
         status: 200,
-        json: async () => ({ s: "ok", t: [1754006400, 1754092800], c: [10.6871, 10.6684] }),
+        json: async () => ({
+          status: true,
+          statusCode: 200,
+          data: { name: "PTT", price: "40.5", th_name: "PTT PCL", currency: "THB", perf_1d: "0.5", perf_p_1d: "1.25" },
+        }),
       }))
     );
     const q = await getQuote(setAsset);
-    expect(q.price).toBe(10.6684);
-    expect(q.previousClose).toBe(10.6871);
+    expect(q.price).toBe(40.5);
+    expect(q.previousClose).toBe(40); // 40.5 - perf_1d(0.5)
     expect(q.currency).toBe("THB");
-    // must have hit Finnomena with '.BK' stripped, not Yahoo
-    const url = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(url).toContain("finnomena.com");
-    expect(url).toContain("symbol=PTT");
+    const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map(([u]) => u as string);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("market-info/api/public/stock/quote/PTT");
+    expect(urls[0]).toContain("finnomena.com");
+    expect(urls[0]).not.toContain("yahoo.com");
   });
 
-  it("falls back to Yahoo (appends .BK) when Finnomena rejects the code", async () => {
+  it("uses a bare SET symbol (ask → stock/quote/ASK)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: true,
+          statusCode: 200,
+          data: { name: "ASK", price: "10.9", th_name: "Asia Sermkij Leasing", currency: "THB", perf_1d: "-0.3" },
+        }),
+      }))
+    );
+    const q = await getQuote({
+      id: "set-1",
+      symbol: "ASK",
+      name: "ASK",
+      type: "stock",
+      currency: "THB",
+      market: "SET",
+      externalId: null,
+      createdAt: new Date(),
+    } as never);
+    expect(q.price).toBe(10.9);
+    expect(q.previousClose).toBeCloseTo(11.2); // 10.9 - (-0.3)
+    const url = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain("stock/quote/ASK");
+    expect(url).not.toContain("ASK.BK");
+  });
+
+  it("falls back to Yahoo .BK when Finnomena has no quote", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn()
-        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ s: "no_data" }) })
+        .mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({ statusCode: 422, stack: [] }) })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
@@ -112,8 +147,7 @@ describe("SET market quotes (Finnomena-first, Yahoo fallback)", () => {
     expect(q.previousClose).toBe(41);
     expect(q.currency).toBe("THB");
     const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map(([u]) => u as string);
-    expect(urls[0]).toContain("finnomena.com");
-    expect(urls[0]).toContain("symbol=PTT");
+    expect(urls[0]).toContain("stock/quote/PTT");
     expect(urls[1]).toContain("yahoo.com");
     expect(urls[1]).toContain("PTT.BK");
   });
