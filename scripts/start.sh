@@ -6,7 +6,13 @@ SEED="${2:-}"
 
 [ -f .env ] || { cp .env.example .env; echo "[start] created .env from .env.example"; }
 if ! grep -q '^AUTH_SECRET=..*' .env; then
-  printf 'AUTH_SECRET=%s\n' "$(openssl rand -base64 32)" >> .env
+  SECRET="$(openssl rand -base64 32)"
+  if grep -q '^AUTH_SECRET=$' .env; then
+    sed -i.bak "s|^AUTH_SECRET=$|AUTH_SECRET=$SECRET|" .env
+    rm -f .env.bak
+  else
+    printf 'AUTH_SECRET=%s\n' "$SECRET" >> .env
+  fi
   echo "[start] generated AUTH_SECRET in .env"
 fi
 
