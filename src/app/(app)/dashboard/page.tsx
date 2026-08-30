@@ -66,7 +66,10 @@ export default async function DashboardPage() {
   };
   const allocation = [...byType.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([type, value]) => ({ label: typeLabels[type] ?? type, value }));
+    .map(([type, value]) => ({
+      label: typeLabels[type] ?? type,
+      value: Math.round(value * rate * 100) / 100,
+    }));
 
   const holdings = view.rows.filter((r) => r.position.qty > 0);
 
@@ -132,7 +135,7 @@ export default async function DashboardPage() {
             <CardDescription>By asset class</CardDescription>
           </CardHeader>
           <CardContent>
-            <AllocationDonut data={allocation} />
+            <AllocationDonut data={allocation} currency={baseCurrency} />
           </CardContent>
         </Card>
       </div>
