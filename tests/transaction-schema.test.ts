@@ -70,4 +70,24 @@ describe("createTransactionSchema", () => {
     });
     expect(res.success).toBe(false);
   });
+
+  it("rejects non-finite quantities and prices", () => {
+    const res = createTransactionSchema.safeParse({
+      ...base,
+      type: "buy",
+      price: Infinity,
+      quantity: Infinity,
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects an invalid date", () => {
+    const res = createTransactionSchema.safeParse({
+      ...base,
+      type: "buy",
+      price: 150,
+      occurredAt: "not-a-date",
+    });
+    expect(res.success).toBe(false);
+  });
 });

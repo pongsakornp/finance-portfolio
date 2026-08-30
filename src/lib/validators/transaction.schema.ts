@@ -5,7 +5,6 @@ export const ASSET_TYPES = [
   "etf",
   "crypto",
   "commodity",
-  "cash",
   "mutualfund",
 ] as const;
 
@@ -34,14 +33,14 @@ export const transactionObjectSchema = z.object({
   assetType: z.enum(ASSET_TYPES),
   assetName: z.string().min(1).max(80).optional(),
   externalId: z.string().max(60).optional(),
-  // only used for cash assets (crypto forces USD, stock/ETF auto-detects)
-  assetCurrency: z.string().length(3).optional(),
   market: z.enum(MARKETS).optional(),
   type: z.enum(["buy", "sell", "dividend"]),
-  quantity: z.coerce.number().positive("Must be > 0"),
-  price: z.coerce.number().nonnegative("Must be >= 0"),
-  fee: z.coerce.number().nonnegative().default(0),
-  occurredAt: z.coerce.date(),
+  quantity: z.coerce.number().finite("Must be a finite number").positive("Must be > 0"),
+  price: z.coerce.number().finite("Must be a finite number").nonnegative("Must be >= 0"),
+  fee: z.coerce.number().finite("Must be a finite number").nonnegative().default(0),
+  occurredAt: z.coerce.date().refine((d) => !Number.isNaN(d.getTime()), {
+    message: "Invalid date",
+  }),
   note: z.string().max(200).optional(),
 });
 

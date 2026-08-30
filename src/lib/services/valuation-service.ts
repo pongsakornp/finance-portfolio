@@ -93,8 +93,6 @@ async function finnomenaStockHistory(symbol: string): Promise<Map<string, number
 
 /** Backfills daily closes into price_history when stale (>3 days). */
 async function ensureHistory(asset: Asset): Promise<void> {
-  // cash never moves — nothing to fetch
-  if (asset.type === "cash") return;
   const cutoff = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
   const [latest] = await db
     .select({ day: priceHistory.day })
@@ -139,11 +137,10 @@ async function ensureHistory(asset: Asset): Promise<void> {
   }
 }
 
-/** Daily backfill of price history for every non-cash asset (cron). */
+/** Daily backfill of price history for every asset (cron). */
 export async function warmAssetHistory(): Promise<void> {
   const all = await db.select({ asset: assets }).from(assets);
   for (const { asset } of all) {
-    if (asset.type === "cash") continue;
     try {
       await ensureHistory(asset);
     } catch {
@@ -214,14 +211,7 @@ export async function portfolioSeries(
   const daysUnion = new Set<string>();
   closeMaps.forEach((m) => m.forEach((_, d) => d >= fromDay && daysUnion.add(d)));
   const timeline = [...daysUnion].sort();
-  if (timeline.length === 0) {
-    // cash-only portfolio: no price history anywhere — synthesize a plain daily timeline
-    if (!distinctAssets.some((a) => a.type === "cash")) return [];
-    const end = Date.now();
-    for (let t = new Date(fromDay + "T00:00:00Z").getTime(); t <= end; t += 86400_000)
-      timeline.push(dayKey(new Date(t)));
-    if (timeline.length === 0) return [];
-  }
+  if (timeline.length === 0) return [];
 
   const holdings = new Map<string, Decimal>();
   let ti = 0;
@@ -244,9 +234,7 @@ export async function portfolioSeries(
     }
     let dayValue = new Decimal(0);
     for (const a of distinctAssets) {
-      // cash has no history rows — constant price 1 in its own currency
-      const rawClose =
-        closeMaps.get(a.id)?.get(day) ?? (a.type === "cash" ? 1 : undefined);
+      const rawClose = closeMaps.get(a.id)?.get(day);
       if (rawClose != null) lastClose.set(a.id, new Decimal(rawClose));
       const lc = lastClose.get(a.id);
       const qty = holdings.get(a.id) ?? new Decimal(0);

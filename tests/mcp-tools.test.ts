@@ -65,7 +65,7 @@ describe("importTransactions", () => {
     vi.clearAllMocks();
   });
 
-  it("passes note and cash asset currency into database insert", async () => {
+  it("passes note and asset fields into database insert", async () => {
     const insertMock = vi.fn().mockResolvedValue(undefined);
     vi.mocked(db.insert).mockReturnValue({ values: insertMock } as never);
 
@@ -73,7 +73,7 @@ describe("importTransactions", () => {
     vi.mocked(db.select).mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ id: "cash-thb-id", currency: "THB" }]),
+          limit: vi.fn().mockResolvedValue([{ id: "asset-1", currency: "THB" }]),
         }),
       }),
     } as never);
@@ -82,16 +82,15 @@ describe("importTransactions", () => {
     const result = await importTransactions(
       [
         {
-          symbol: "THB",
-          name: "Thai Baht",
-          assetType: "cash",
+          symbol: "B-EQUITY",
+          name: "B-EQUITY",
+          assetType: "mutualfund",
           type: "buy",
           quantity: 5000,
-          price: 1,
+          price: 30,
           fee: 0,
           occurredAt: "2026-01-01T00:00:00.000Z",
-          assetCurrency: "THB",
-          note: "Initial bank balance",
+          note: "Initial investment",
         },
       ],
       validUuid,
@@ -103,9 +102,9 @@ describe("importTransactions", () => {
     expect(insertMock).toHaveBeenCalledWith(
       expect.objectContaining({
         portfolioId: validUuid,
-        note: "Initial bank balance",
+        note: "Initial investment",
         quantity: "5000",
-        price: "1",
+        price: "30",
       })
     );
   });

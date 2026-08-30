@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { assets, portfolios, priceCache, transactions } from "@/lib/db/schema";
+import { assets, portfolios, transactions } from "@/lib/db/schema";
 import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
 import {
   ASSET_TYPES,
@@ -20,40 +20,26 @@ export type ImportRow = {
   price: number;
   fee?: number;
   occurredAt: string; // ISO date
-  currency?: string; // cash only (legacy/CSV alias)
-  assetCurrency?: string; // cash only
   market?: "US" | "SET";
   note?: string;
   externalId?: string;
 };
 
-/** find-or-create by (symbol, type) — asset rows are shared across users */
+/**
+ * find-or-create by (symbol, type) — asset rows are shared across users.
+ * currency/market/externalId are set once at creation and NEVER mutated by a
+ * later write: assets are shared, so re-denominating one from a single user's
+ * transaction would silently change every other user's valuation. ponytail: a
+ * wrong first value can't be corrected from the dialog — create with the right
+ * attributes.
+ */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   const [existing] = await db
-    .select({ id: assets.id, currency: assets.currency, market: assets.market, externalId: assets.externalId })
+    .select({ id: assets.id })
     .from(assets)
     .where(and(eq(assets.symbol, input.symbol), eq(assets.type, input.type)))
     .limit(1);
-  if (existing) {
-    // keep the asset's currency current when a cash edit changes it (find-or-create
-    // matches on symbol+type only, so a currency change would otherwise be silently lost)
-    if (input.currency && existing.currency !== input.currency) {
-      await db.update(assets).set({ currency: input.currency }).where(eq(assets.id, existing.id));
-    }
-    // keep the asset's market current (same find-or-create caveat) — SET assets must
-    // be fetched Finnomena-first and valued as THB.
-    if (input.market && existing.market !== input.market) {
-      await db.update(assets).set({ market: input.market }).where(eq(assets.id, existing.id));
-    }
-    // persist an explicit CoinGecko id (the crypto pricing source) — the id is not part
-    // of the find-or-create key, so without this an edit would be silently dropped.
-    // Flush the cached quote so the new id takes effect immediately (bypasses the TTL).
-    if (input.externalId && existing.externalId !== input.externalId) {
-      await db.update(assets).set({ externalId: input.externalId }).where(eq(assets.id, existing.id));
-      await db.delete(priceCache).where(eq(priceCache.assetId, existing.id));
-    }
-    return existing.id;
-  }
+  if (existing) return existing.id;
 
   const [created] = await db
     .insert(assets)
@@ -81,13 +67,11 @@ export async function createTransaction(
     currency:
       data.assetType === "crypto"
         ? "USD"
-        : data.assetType === "cash"
-          ? (data.assetCurrency?.toUpperCase() ?? "USD")
+        : data.market === "SET"
+          ? "THB" // SET assets are Baht-denominated
           : data.assetType === "mutualfund"
             ? "THB"
-            : data.market === "SET"
-              ? "THB" // SET assets are Baht-denominated
-              : undefined, // stock/ETF/commodity currency auto-detected on first quote fetch
+            : undefined, // stock/ETF/commodity currency auto-detected on first quote fetch
     market: data.market ?? "US",
     externalId: data.externalId,
   });
@@ -147,13 +131,11 @@ export async function updateTransaction(
     currency:
       data.assetType === "crypto"
         ? "USD"
-        : data.assetType === "cash"
-          ? (data.assetCurrency?.toUpperCase() ?? "USD")
+        : data.market === "SET"
+          ? "THB"
           : data.assetType === "mutualfund"
             ? "THB"
-            : data.market === "SET"
-              ? "THB"
-              : undefined,
+            : undefined,
     market: data.market ?? "US",
     externalId: data.externalId,
   });
@@ -189,10 +171,9 @@ export async function importTransactions(
       portfolioId,
       occurredAt: new Date(row.occurredAt),
       assetName: row.assetName ?? row.name,
-      assetCurrency: row.assetCurrency ?? row.currency,
     });
     if (!parsed.success) {
-      errors.push(`Row ${i + 2}: ${parsed.error.issues[0]?.message}`);
+      errors.push(`Row ${i + 2}: ${parsed.error.issues.map((e) => e.message).join("; ")}`);
       continue;
     }
     const d = parsed.data;
@@ -203,13 +184,11 @@ export async function importTransactions(
       currency:
         d.assetType === "crypto"
           ? "USD"
-          : d.assetType === "cash"
-            ? (d.assetCurrency?.toUpperCase() ?? "USD")
+          : d.market === "SET"
+            ? "THB"
             : d.assetType === "mutualfund"
               ? "THB"
-              : d.market === "SET"
-                ? "THB"
-                : undefined,
+              : undefined,
       market: d.market ?? "US",
       externalId: d.externalId,
     });

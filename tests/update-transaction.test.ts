@@ -33,61 +33,31 @@ function selectResolves(rows: unknown[]) {
 }
 
 describe("upsertAsset", () => {
-  it("updates an existing cash asset's currency when it differs", async () => {
-    selectResolves([{ id: "asset-1", currency: "USD" }]);
-    const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    vi.mocked(db.update).mockImplementation(() => ({ set } as never));
-
-    await expect(
-      upsertAsset({
-        symbol: "KBank",
-        name: "KBank",
-        type: "cash",
-        currency: "THB",
-      })
-    ).resolves.toBe("asset-1");
-
-    expect(set).toHaveBeenCalledWith(expect.objectContaining({ currency: "THB" }));
-  });
-
-  it("does not touch currency when it already matches", async () => {
+  it("returns the existing asset and does not re-denominate it (shared across users)", async () => {
     selectResolves([{ id: "asset-1", currency: "THB" }]);
     vi.mocked(db.update).mockClear();
+    vi.mocked(db.delete).mockClear();
 
     await expect(
       upsertAsset({
-        symbol: "KBank",
-        name: "KBank",
-        type: "cash",
-        currency: "THB",
+        symbol: "B-EQUITY",
+        name: "B-EQUITY",
+        type: "mutualfund",
+        currency: "USD", // a different currency must NOT overwrite the shared asset
       })
     ).resolves.toBe("asset-1");
 
     expect(db.update).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it("persists a new CoinGecko id on an existing crypto asset and flushes its cached quote", async () => {
-    selectResolves([{ id: "asset-1", currency: "USD", externalId: "bitcoin" }]);
-    const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    vi.mocked(db.update).mockImplementation(() => ({ set } as never));
-    const del = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(db.delete).mockImplementation(() => ({ where: del } as never));
-
-    await expect(
-      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin-cash" })
-    ).resolves.toBe("asset-1");
-
-    expect(set).toHaveBeenCalledWith(expect.objectContaining({ externalId: "bitcoin-cash" }));
-    expect(del).toHaveBeenCalled();
-  });
-
-  it("does not touch externalId or the cache when the id is unchanged", async () => {
+  it("does not overwrite a shared asset's CoinGecko id or touch the cache", async () => {
     selectResolves([{ id: "asset-1", currency: "USD", externalId: "bitcoin" }]);
     vi.mocked(db.update).mockClear();
     vi.mocked(db.delete).mockClear();
 
     await expect(
-      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin" })
+      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin-cash" })
     ).resolves.toBe("asset-1");
 
     expect(db.update).not.toHaveBeenCalled();
