@@ -167,11 +167,6 @@ function ttlFor(type: Asset["type"]): number {
 export async function getQuote(asset: Asset): Promise<Quote> {
   const base = { assetId: asset.id, symbol: asset.symbol, name: asset.name, type: asset.type };
 
-  // cash has no market price — always worth exactly 1 of its own currency
-  if (asset.type === "cash") {
-    return { ...base, currency: asset.currency, price: 1, previousClose: null };
-  }
-
   const [cached] = await db
     .select()
     .from(priceCache)

@@ -51,9 +51,6 @@ export function TransactionDialog({
   const [open, setOpen] = useState(false);
   const [assetType, setAssetType] = useState(transaction?.asset.type ?? "stock");
   const [market, setMarket] = useState<"US" | "SET">(transaction?.asset.market ?? "US");
-  const [cashCurrency, setCashCurrency] = useState(
-    transaction && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
-  );
   const [txType, setTxType] = useState<"buy" | "sell" | "dividend">(transaction?.type ?? "buy");
   const [portfolioId, setPortfolioId] = useState(
     transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0].id
@@ -70,9 +67,6 @@ export function TransactionDialog({
       setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0].id);
       setAssetType(isEdit ? transaction.asset.type : "stock");
       setMarket(isEdit ? transaction.asset.market : "US");
-      setCashCurrency(
-        isEdit && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
-      );
     }
   }
 
@@ -173,7 +167,6 @@ export function TransactionDialog({
                           etf: "ETF",
                           crypto: "Crypto",
                           commodity: "Commodity",
-                          cash: "Cash",
                           mutualfund: "Fund",
                         }[String(v)] ?? v)
                       }
@@ -184,14 +177,13 @@ export function TransactionDialog({
                     <SelectItem value="etf">ETF</SelectItem>
                     <SelectItem value="crypto">Crypto</SelectItem>
                     <SelectItem value="commodity">Commodity</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="mutualfund">Fund</SelectItem>
                   </SelectContent>
                 </Select>
               </FieldContent>
             </Field>
 
-            {assetType !== "crypto" && assetType !== "cash" && (
+            {assetType !== "crypto" && (
               <Field>
                 <FieldLabel className="text-muted-foreground">Market</FieldLabel>
                 <FieldContent>
@@ -212,9 +204,7 @@ export function TransactionDialog({
             )}
 
             <Field>
-              <FieldLabel className="text-muted-foreground">
-                {assetType === "cash" ? "Bank name" : "Symbol"}
-              </FieldLabel>
+              <FieldLabel className="text-muted-foreground">Symbol</FieldLabel>
               <FieldContent>
                 <Input
                   name="symbol"
@@ -225,11 +215,9 @@ export function TransactionDialog({
                       ? "BTC"
                       : assetType === "commodity"
                         ? "XAUUSD=X (gold), CL=F (oil)"
-                        : assetType === "cash"
-                          ? "e.g. KBank"
-                          : assetType === "mutualfund"
-                            ? "B-EQUITY (Finnomena code)"
-                            : "AAPL / PTT.BK / TDEX.BK"
+                        : assetType === "mutualfund"
+                          ? "B-EQUITY (Finnomena code)"
+                          : "AAPL / PTT.BK / TDEX.BK"
                   }
                   className="uppercase"
                 />
@@ -252,22 +240,6 @@ export function TransactionDialog({
                   <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
                 </FieldContent>
               </Field>
-            ) : assetType === "cash" ? (
-              <Field>
-                <FieldLabel className="text-muted-foreground">Currency</FieldLabel>
-                <FieldContent>
-                  <input type="hidden" name="assetCurrency" value={cashCurrency} />
-                  <Select value={cashCurrency} onValueChange={(v) => v && setCashCurrency(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="THB">THB</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FieldContent>
-              </Field>
             ) : (
               <Field>
                 <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
@@ -277,24 +249,7 @@ export function TransactionDialog({
               </Field>
             )}
 
-            {txType === "dividend" ? null : assetType === "cash" ? (
-              <>
-                {/* cash is priced at exactly 1 unit of its own currency */}
-                <input type="hidden" name="price" value="1" />
-                <Field>
-                  <FieldLabel className="text-muted-foreground">Amount</FieldLabel>
-                  <FieldContent>
-                    <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
-                  <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={padDecimals(transaction?.fee, 4)} />
-                  </FieldContent>
-                </Field>
-              </>
-            ) : (
+            {txType === "dividend" ? null : (
               <>
                 <Field>
                   <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>

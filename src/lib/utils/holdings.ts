@@ -4,7 +4,6 @@ const TYPE_LABEL: Record<string, string> = {
   crypto: "Crypto",
   mutualfund: "Fund",
   commodity: "Commodity",
-  cash: "Cash",
 };
 
 const TYPE_UNIT: Record<string, string> = {
@@ -13,7 +12,6 @@ const TYPE_UNIT: Record<string, string> = {
   crypto: "UNITS",
   mutualfund: "UNITS",
   commodity: "UNITS",
-  cash: "UNITS",
 };
 
 export function typeLabel(type: string) {

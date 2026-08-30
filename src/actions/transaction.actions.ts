@@ -20,6 +20,10 @@ function revalidateAll() {
   revalidatePath("/portfolios");
 }
 
+function validationMessage(error: { issues: Array<{ message: string }> }) {
+  return error.issues.map((i) => i.message).join("; ") || "Invalid input";
+}
+
 export async function createTransactionAction(formData: FormData) {
   const userId = await requireUserId();
 
@@ -33,13 +37,12 @@ export async function createTransactionAction(formData: FormData) {
     type: formData.get("type"),
     quantity: formData.get("quantity"),
     price: formData.get("price"),
-    assetCurrency: (formData.get("assetCurrency") as string) || undefined,
     fee: formData.get("fee") || 0,
     occurredAt: formData.get("occurredAt"),
     note: formData.get("note") || undefined,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return { error: validationMessage(parsed.error) };
   }
 
   try {
@@ -74,13 +77,12 @@ export async function updateTransactionAction(id: string, formData: FormData) {
     type: formData.get("type"),
     quantity: formData.get("quantity"),
     price: formData.get("price"),
-    assetCurrency: (formData.get("assetCurrency") as string) || undefined,
     fee: formData.get("fee") || 0,
     occurredAt: formData.get("occurredAt"),
     note: formData.get("note") || undefined,
   });
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return { error: validationMessage(parsed.error) };
   }
 
   try {

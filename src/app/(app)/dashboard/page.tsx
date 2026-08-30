@@ -61,7 +61,6 @@ export default async function DashboardPage() {
     etf: "ETFs",
     crypto: "Crypto",
     commodity: "Commodities",
-    cash: "Cash",
     mutualfund: "Fund",
   };
   const allocation = [...byType.entries()]

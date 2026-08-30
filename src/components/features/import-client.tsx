@@ -43,8 +43,6 @@ const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency,m
 AAPL,,stock,buy,10,150.25,1.99,2025-06-01,,US
 BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15,,US
 XAUUSD=X,Gold,commodity,buy,1,2400,0,2025-08-01,,US
-USD,Cash (USD),cash,buy,5000,1,0,2025-08-10,USD,
-THB,Cash (THB),cash,buy,150000,1,0,2025-08-10,THB,
 PTT.BK,,stock,buy,100,40.5,5,2025-08-20,,SET`;
 
 export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; name: string }> }) {
