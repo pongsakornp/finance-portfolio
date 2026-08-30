@@ -17,6 +17,17 @@ npx --yes pnpm@10 dev           # http://localhost:3000
 
 Demo login after seeding: `demo@finance.local` / `demo1234`.
 
+## Spinning up an isolated Docker test environment
+
+`scripts/start.sh` builds and starts the whole app in an isolated Compose project, auto-picks free host ports, and seeds demo data:
+
+```bash
+./scripts/start.sh qa            # containers qa_app / qa_db
+./scripts/start.sh qa no-seed    # skip seeding (re-run with existing data)
+```
+
+The environment name becomes the Compose project name, so containers and the DB volume are namespaced (`<env>_app`, `<env>_db`, `<env>_pgdata`). Multiple environments can run at once — each picks its own free ports (app from 3000, db from 5432). App URL and DB port are printed on success; login is `demo@finance.local` / `demo1234`. Requires `.env` (auto-created from `.env.example`, with `AUTH_SECRET` generated if unset).
+
 ## Docs
 
 - [`AGENTS.md`](./AGENTS.md) — architecture rules & conventions (start here)
