@@ -55,6 +55,9 @@ export function TransactionDialog({
     transaction && transaction.asset.type === "cash" ? transaction.asset.currency : "USD"
   );
   const [txType, setTxType] = useState<"buy" | "sell" | "dividend">(transaction?.type ?? "buy");
+  const [portfolioId, setPortfolioId] = useState(
+    transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0].id
+  );
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -64,6 +67,7 @@ export function TransactionDialog({
     if (next) {
       // reset to the transaction's (or add) values on every open
       setTxType(isEdit ? transaction.type : "buy");
+      setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0].id);
       setAssetType(isEdit ? transaction.asset.type : "stock");
       setMarket(isEdit ? transaction.asset.market : "US");
       setCashCurrency(
@@ -119,20 +123,8 @@ export function TransactionDialog({
             <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Portfolio</FieldLabel>
               <FieldContent>
-                <input
-                  type="hidden"
-                  name="portfolioId"
-                  defaultValue={transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0].id}
-                />
-                <Select
-                  name="portfolioPicker"
-                  defaultValue={transaction?.portfolioId ?? defaultPortfolioId ?? String(portfolios[0].id)}
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    const hidden = formRef.current?.elements.namedItem("portfolioId") as HTMLInputElement;
-                    if (hidden) hidden.value = v;
-                  }}
-                >
+                <input type="hidden" name="portfolioId" value={portfolioId} />
+                <Select value={portfolioId} onValueChange={(v) => v && setPortfolioId(v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Portfolio">
                       {(v) => portfolios.find((p) => p.id === v)?.name ?? "Select"}
