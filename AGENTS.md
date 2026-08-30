@@ -25,6 +25,8 @@ $P seed               # demo data: demo@finance.local / demo1234
 
 Local dev needs Postgres running (`docker compose up db` or any instance) and `.env` copied from `.env.example`.
 
+Named test environment (build + start + seed): `./scripts/start.sh <env> [no-seed]` — see [Docker workflow](#workflow-code--checks--docker-deploy--verify).
+
 ## Non-negotiable architecture rules
 
 The dependency direction is one-way. Never break it:
@@ -100,6 +102,7 @@ The full loop for any change:
    docker compose up --build -d --force-recreate
    ```
    Requires `POSTGRES_PASSWORD` and `AUTH_SECRET` in `.env` (any values work locally; `AUTH_SECRET` 32+ chars — `openssl rand -base64 32`). `CRON_ENABLED=false` keeps local runs quiet. Watch migrations + startup with `docker compose logs -f app`.
+   For an isolated named environment (own containers/volume, auto-picked host ports, optional seed) use `./scripts/start.sh <env> [no-seed]` — it runs the same `up --build -d --force-recreate` under `docker compose -p <env>`, so containers/volume become `<env>_app`/`<env>_db`/`<env>_pgdata`. Pass `no-seed` to skip seeding on re-run (the seed re-inserts a portfolio + transactions, so don't re-seed an env that already has data).
 4. **Verify** — wait for the server, then:
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/health   # 200 = healthy

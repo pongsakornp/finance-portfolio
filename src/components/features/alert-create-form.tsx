@@ -36,19 +36,19 @@ export function AlertCreateForm() {
   }
 
   return (
-    <form action={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
-      <Field className="sm:w-32">
+    <form action={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+      <Field>
         <FieldLabel htmlFor="symbol">Symbol</FieldLabel>
         <FieldContent>
           <Input id="symbol" name="symbol" required placeholder="BTC" className="uppercase" />
         </FieldContent>
       </Field>
-      <Field className="sm:w-28">
+      <Field>
         <FieldLabel>Class</FieldLabel>
         <FieldContent>
           <input type="hidden" name="assetType" value={assetType} />
           <Select defaultValue={assetType} onValueChange={(v) => v && setAssetType(v)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue>
                 {(v) =>
                   ({
@@ -71,12 +71,12 @@ export function AlertCreateForm() {
           </Select>
         </FieldContent>
       </Field>
-      <Field className="sm:w-28">
+      <Field>
         <FieldLabel>Direction</FieldLabel>
         <FieldContent>
           <input type="hidden" name="direction" value={direction} />
           <Select defaultValue={direction} onValueChange={(v) => v && setDirection(v)}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue>
                 {(v) => ({ above: "Above", below: "Below" }[String(v)] ?? v)}
               </SelectValue>
@@ -88,7 +88,7 @@ export function AlertCreateForm() {
           </Select>
         </FieldContent>
       </Field>
-      <Field className="sm:w-36">
+      <Field>
         <FieldLabel htmlFor="threshold">Threshold price</FieldLabel>
         <FieldContent>
           <Input id="threshold" name="threshold" type="number" step="any" min="0" required />
