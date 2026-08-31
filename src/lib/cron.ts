@@ -56,7 +56,7 @@ export function startCron() {
   // nightly: backfill asset price history + daily FX so reads never fetch
   cron.schedule("5 0 * * *", () => {
     void warmHistory();
-    void warmFxHistory();
+    void warmFx();
   });
   // hourly: keep quote cache warm + evaluate alerts + fill benchmark cache
   cron.schedule("0 * * * *", () => {
@@ -72,5 +72,13 @@ async function warmHistory() {
     await warmAssetHistory();
   } catch (e) {
     console.error("[cron] asset history warm failed:", e);
+  }
+}
+
+async function warmFx() {
+  try {
+    await warmFxHistory();
+  } catch (e) {
+    console.error("[cron] FX history warm failed:", e);
   }
 }

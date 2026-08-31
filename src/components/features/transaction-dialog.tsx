@@ -53,7 +53,7 @@ export function TransactionDialog({
   const [market, setMarket] = useState<"US" | "SET">(transaction?.asset.market ?? "US");
   const [txType, setTxType] = useState<"buy" | "sell" | "dividend">(transaction?.type ?? "buy");
   const [portfolioId, setPortfolioId] = useState(
-    transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0].id
+    transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0]?.id
   );
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -64,7 +64,7 @@ export function TransactionDialog({
     if (next) {
       // reset to the transaction's (or add) values on every open
       setTxType(isEdit ? transaction.type : "buy");
-      setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0].id);
+      setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0]?.id);
       setAssetType(isEdit ? transaction.asset.type : "stock");
       setMarket(isEdit ? transaction.asset.market : "US");
     }
@@ -83,14 +83,6 @@ export function TransactionDialog({
     });
   }
 
-  if (portfolios.length === 0) {
-    return (
-      <Button size="sm" variant="outline" disabled title="Create a portfolio first">
-        Add transaction
-      </Button>
-    );
-  }
-
   const trigger = isEdit ? (
     <Button variant="ghost" size="icon" aria-label="Edit transaction">
       <PencilIcon className="size-4" />
@@ -100,6 +92,14 @@ export function TransactionDialog({
       <PlusIcon data-icon="inline-start" /> Add transaction
     </Button>
   );
+
+  if (portfolios.length === 0) {
+    return (
+      <Button size="sm" variant="outline" disabled title="Create a portfolio first">
+        Add transaction
+      </Button>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

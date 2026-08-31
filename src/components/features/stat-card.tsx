@@ -22,7 +22,7 @@ export function StatCard({
     <Card>
       <CardHeader className="pb-2">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl tabular-nums">{title}</CardTitle>
+        <CardTitle className="text-2xl tabular-nums font-sans">{title}</CardTitle>
       </CardHeader>
       {footer && (
         <CardContent className={footerClassName ?? "text-sm text-muted-foreground"}>
@@ -46,7 +46,7 @@ export function TodayFooter({
   currency: string;
 }) {
   return (
-    <>
+    <div className="flex flex-wrap items-baseline gap-x-1">
       Today{" "}
       {dayChange !== 0 ? (
         <>
@@ -55,6 +55,6 @@ export function TodayFooter({
       ) : (
         <span className="text-muted-foreground">—</span>
       )}
-    </>
+    </div>
   );
 }
