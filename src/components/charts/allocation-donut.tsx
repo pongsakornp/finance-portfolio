@@ -44,7 +44,7 @@ export function AllocationDonut({
   );
 
   return (
-    <ChartContainer config={config} className="mx-auto aspect-square max-h-[260px]">
+    <ChartContainer config={config} className="mx-auto aspect-square max-h-[260px] w-full">
       <PieChart>
         <Pie
           data={items}
