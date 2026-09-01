@@ -85,7 +85,7 @@ async function warmFx() {
   }
 }
 
-async function warmFunds() {
+export async function warmFunds() {
   try {
     await refreshFundCatalog();
     await backfillMutualFundNames();

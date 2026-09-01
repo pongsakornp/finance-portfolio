@@ -8,7 +8,8 @@ export async function register() {
     process.env.CRON_ENABLED !== "false" &&
     !process.env.NEXT_PHASE?.includes("build")
   ) {
-    const { startCron } = await import("@/lib/cron");
+    const { startCron, warmFunds } = await import("@/lib/cron");
     startCron();
+    void warmFunds(); // seed the fund catalog on boot so prod doesn't wait for the 5 AM tick
   }
 }
