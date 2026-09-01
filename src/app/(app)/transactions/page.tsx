@@ -39,7 +39,7 @@ export default async function TransactionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" nativeButton={false} render={<a href="/api/export" download>Export CSV</a>} />
+          <Button variant="outline" size="sm" nativeButton={false} render={<a href="/api/export" download>Export JSON</a>} />
           <TransactionDialog portfolios={portfolios} />
         </div>
       </div>
@@ -86,14 +86,17 @@ export default async function TransactionsPage() {
                             {tx.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {tx.type === "dividend"
-                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                            : fmtQty(parseFloat(tx.quantity))}
+                        <TableCell className="font-medium">
+                          {tx.asset.name !== tx.asset.symbol && (
+                            <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
+                          )}
+                          {tx.asset.name}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                          {fmtQty(parseFloat(tx.quantity))}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {parseFloat(tx.fee) ? fmtMoney(parseFloat(tx.fee), tx.asset.currency) : "—"}
@@ -117,7 +120,7 @@ export default async function TransactionsPage() {
                         <div className="flex items-center gap-2">
                           <Badge
                             variant={
-                              tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                              tx.type === "buy" ? "default" : "warning"
                             }
                             className="capitalize"
                           >
@@ -131,7 +134,12 @@ export default async function TransactionsPage() {
                         </div>
                       </div>
                       <div>
-                        <span className="font-medium">{tx.asset.symbol}</span>
+                        <span className="font-medium">
+                          {tx.asset.name !== tx.asset.symbol && (
+                            <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
+                          )}
+                          {tx.asset.name}
+                        </span>
                         <span className="text-sm text-muted-foreground">
                           {" "}
                           · {nameById.get(tx.portfolioId) ?? "—"}
@@ -139,15 +147,11 @@ export default async function TransactionsPage() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="tabular-nums">
-                          {tx.type === "dividend"
-                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                            : fmtQty(parseFloat(tx.quantity))}
-                          {tx.type !== "dividend" && (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                            </span>
-                          )}
+                          {fmtQty(parseFloat(tx.quantity))}
+                          <span className="text-muted-foreground">
+                            {" "}
+                            @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                          </span>
                         </span>
                         <span className="tabular-nums text-muted-foreground">
                           {parseFloat(tx.fee) ? `Fee ${fmtMoney(parseFloat(tx.fee), tx.asset.currency)}` : ""}

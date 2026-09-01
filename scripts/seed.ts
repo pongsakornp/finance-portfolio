@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 
 import { db, client } from "../src/lib/db";
 import { assets, portfolios, transactions, users } from "../src/lib/db/schema";
+import { refreshFundCatalog } from "../src/lib/services/fund-catalog-service";
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400_000);
 
@@ -67,21 +68,19 @@ async function main() {
   const txs: Array<typeof transactions.$inferInsert> = [
     { portfolioId: portfolio.id, assetId: ids.aapl, type: "buy", quantity: "10", price: "150.20", fee: "1.99", occurredAt: daysAgo(300) },
     { portfolioId: portfolio.id, assetId: ids.aapl, type: "buy", quantity: "5", price: "172.40", fee: "1.99", occurredAt: daysAgo(150) },
-    { portfolioId: portfolio.id, assetId: ids.aapl, type: "dividend", quantity: "26", price: "0", occurredAt: daysAgo(120) },
     { portfolioId: portfolio.id, assetId: ids.msft, type: "buy", quantity: "8", price: "310.00", fee: "1.99", occurredAt: daysAgo(280) },
     { portfolioId: portfolio.id, assetId: ids.spy, type: "buy", quantity: "15", price: "410.50", fee: "2.50", occurredAt: daysAgo(320) },
-    { portfolioId: portfolio.id, assetId: ids.spy, type: "dividend", quantity: "31.80", price: "0", occurredAt: daysAgo(90) },
     { portfolioId: portfolio.id, assetId: ids.btc, type: "buy", quantity: "0.35", price: "42000", fee: "0", occurredAt: daysAgo(260) },
     { portfolioId: portfolio.id, assetId: ids.btc, type: "buy", quantity: "0.15", price: "57500", fee: "0", occurredAt: daysAgo(140) },
     { portfolioId: portfolio.id, assetId: ids.eth, type: "buy", quantity: "2.4", price: "2250", fee: "0", occurredAt: daysAgo(230) },
     { portfolioId: portfolio.id, assetId: ids.eth, type: "sell", quantity: "0.6", price: "3050", fee: "0", occurredAt: daysAgo(60) },
     { portfolioId: portfolio.id, assetId: ids.ptt, type: "buy", quantity: "300", price: "34.25", fee: "105.00", occurredAt: daysAgo(200) },
-    { portfolioId: portfolio.id, assetId: ids.ptt, type: "dividend", quantity: "1026", price: "0", note: "THB cash dividend", occurredAt: daysAgo(45) },
     { portfolioId: portfolio.id, assetId: ids.bequity, type: "buy", quantity: "1000", price: "24.50", fee: "0", occurredAt: daysAgo(200) },
     { portfolioId: portfolio.id, assetId: ids.bequity, type: "buy", quantity: "500", price: "27.20", fee: "0", occurredAt: daysAgo(60) },
   ];
   await db.insert(transactions).values(txs);
 
+  await refreshFundCatalog();
   console.log(`Seeded ${txs.length} transactions into "Long-term".`);
   console.log("Login: demo@finance.local / demo1234");
 }

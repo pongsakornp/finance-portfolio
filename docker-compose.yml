@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_URL: postgres://finance:${POSTGRES_PASSWORD}@db:5432/finance
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in Dokploy env}
+      AUTH_URL: ${AUTH_URL:-}
       CRON_ENABLED: ${CRON_ENABLED:-true}
       NODE_ENV: production
     ports:

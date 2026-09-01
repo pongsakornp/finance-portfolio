@@ -57,6 +57,20 @@
       "when": 1788002669240,
       "tag": "0007_dusty_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788191510111,
+      "tag": "0008_omniscient_mentallo",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788193368516,
+      "tag": "0009_fat_the_watchers",
+      "breakpoints": true
     }
   ]
 }

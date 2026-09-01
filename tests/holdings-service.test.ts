@@ -7,7 +7,7 @@ import {
 } from "@/lib/services/holdings-service";
 
 const tx = (
-  type: "buy" | "sell" | "dividend",
+  type: "buy" | "sell",
   quantity: number,
   price = 0,
   fee = 0
@@ -53,15 +53,6 @@ describe("computePosition — average cost method", () => {
   it("ignores sells without holdings (oversell guard)", () => {
     const pos = computePosition([tx("sell", 5, 100)], 100);
     expect(pos.qty).toBe(0);
-    expect(pos.realizedPL).toBe(0);
-  });
-
-  it("accumulates dividends from quantity field", () => {
-    const pos = computePosition(
-      [tx("buy", 10, 50), tx("dividend", 12.5), tx("dividend", 7)],
-      50
-    );
-    expect(pos.dividendsReceived).toBe(19.5);
     expect(pos.realizedPL).toBe(0);
   });
 

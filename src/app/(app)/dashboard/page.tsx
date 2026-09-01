@@ -49,7 +49,6 @@ export default async function DashboardPage() {
 
   // single FX lookup for display conversion
   const rate = await baseRate(baseCurrency);
-  const money = (usd: number) => fmtMoney(usd * rate, baseCurrency);
 
   const byType = new Map<string, number>();
   for (const row of view.rows) {
@@ -78,10 +77,6 @@ export default async function DashboardPage() {
     month: r.month,
     value: Math.round((r.invested - r.soldProceeds) * rate * 100) / 100,
   }));
-  const dividends = monthly.map((r) => ({
-    month: r.month,
-    value: Math.round(r.dividends * rate * 100) / 100,
-  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -106,15 +101,8 @@ export default async function DashboardPage() {
           footerClassName="text-sm"
         />
         <StatCard
-          label="Realized + Dividends"
-          title={
-            <PL
-              value={(t.realizedPL + t.dividendsReceived) * rate}
-              currency={baseCurrency}
-              compact
-            />
-          }
-          footer={`Dividends ${money(t.dividendsReceived)}`}
+          label="Realized"
+          title={<PL value={t.realizedPL * rate} currency={baseCurrency} compact />}
         />
       </div>
 
@@ -149,19 +137,6 @@ export default async function DashboardPage() {
             <MonthlyBarsChart
               data={contribution}
               label="Contribution"
-              currency={baseCurrency}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Dividend by month</CardTitle>
-            <CardDescription>Dividends received ({baseCurrency})</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MonthlyBarsChart
-              data={dividends}
-              label="Dividends"
               currency={baseCurrency}
             />
           </CardContent>

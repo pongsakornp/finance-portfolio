@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
 import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
+import { getFundName } from "@/lib/services/fund-catalog-service";
 import {
   ASSET_TYPES,
   createTransactionSchema,
@@ -15,11 +16,12 @@ export type ImportRow = {
   name?: string;
   assetName?: string;
   assetType: (typeof ASSET_TYPES)[number];
-  type: "buy" | "sell" | "dividend";
+  type: "buy" | "sell";
   quantity: number;
   price: number;
   fee?: number;
   occurredAt: string; // ISO date
+  currency?: string;
   market?: "US" | "SET";
   note?: string;
   externalId?: string;
@@ -41,11 +43,17 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
     .limit(1);
   if (existing) return existing.id;
 
+  const fallback = input.name || input.symbol;
+  const name =
+    fallback === input.symbol && input.type === "mutualfund"
+      ? (await getFundName(input.symbol)) ?? fallback
+      : fallback;
+
   const [created] = await db
     .insert(assets)
     .values({
       symbol: input.symbol,
-      name: input.name || input.symbol,
+      name,
       type: input.type,
       currency: input.currency?.toUpperCase() ?? "USD",
       market: input.market ?? "US",
@@ -182,13 +190,14 @@ export async function importTransactions(
       name: d.assetName ?? "",
       type: d.assetType,
       currency:
-        d.assetType === "crypto"
+        row.currency?.toUpperCase() ??
+        (d.assetType === "crypto"
           ? "USD"
           : d.market === "SET"
             ? "THB"
             : d.assetType === "mutualfund"
               ? "THB"
-              : undefined,
+              : undefined),
       market: d.market ?? "US",
       externalId: d.externalId,
     });

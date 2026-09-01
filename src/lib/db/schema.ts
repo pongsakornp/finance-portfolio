@@ -22,7 +22,7 @@ export const assetTypeEnum = pgEnum("asset_type", [
   "mutualfund",
 ]);
 export const marketEnum = pgEnum("asset_market", ["US", "SET"]);
-export const txTypeEnum = pgEnum("tx_type", ["buy", "sell", "dividend"]);
+export const txTypeEnum = pgEnum("tx_type", ["buy", "sell"]);
 export const alertDirectionEnum = pgEnum("alert_direction", ["above", "below"]);
 
 export const users = pgTable("users", {
@@ -76,7 +76,7 @@ export const transactions = pgTable(
       .notNull()
       .references(() => assets.id, { onDelete: "restrict" }),
     type: txTypeEnum("type").notNull(),
-    // buy/sell: quantity in units + price per unit. dividend: quantity = cash amount paid
+    // buy/sell: quantity in units + price per unit
     quantity: numeric("quantity", { precision: 28, scale: 10 }).notNull(),
     price: numeric("price", { precision: 20, scale: 8 }).notNull(),
     fee: numeric("fee", { precision: 20, scale: 8 }).notNull().default("0"),
@@ -170,6 +170,15 @@ export const alerts = pgTable("alerts", {
   active: boolean("active").notNull().default(true),
   triggeredAt: timestamp("triggered_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Finnomena fund registry (mutual funds): short_code is the master mutual-fund symbol.
+export const fundCatalog = pgTable("fund_catalog", {
+  shortCode: text("short_code").primaryKey(),
+  name: text("name").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });

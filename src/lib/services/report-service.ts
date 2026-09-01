@@ -6,7 +6,7 @@ import type { TxRow } from "@/lib/services/view-service";
 
 export type TxForReport = {
   assetId?: string;
-  type: "buy" | "sell" | "dividend";
+  type: "buy" | "sell";
   quantity: string | number;
   price: string | number;
   fee: string | number;
@@ -18,7 +18,6 @@ export type MonthlyRow = {
   invested: number;
   soldProceeds: number;
   realizedPL: number;
-  dividends: number;
   fees: number;
 };
 
@@ -48,8 +47,7 @@ export async function toUsdReportTxs(txs: TxRow[]): Promise<TxForReport[]> {
     out.push({
       assetId: tx.assetId,
       type: tx.type,
-      // dividends: quantity IS the cash amount → convert it; buy/sell: convert price+fee
-      quantity: tx.type === "dividend" ? String(q * r) : String(q),
+      quantity: String(q),
       price: String(p * r),
       fee: String(parseFloat(String(tx.fee)) * r),
       occurredAt: tx.occurredAt,
@@ -75,7 +73,6 @@ export function monthlyBreakdown(txs: TxForReport[]): MonthlyRow[] {
         invested: 0,
         soldProceeds: 0,
         realizedPL: 0,
-        dividends: 0,
         fees: 0,
       } satisfies MonthlyRow);
 
@@ -91,7 +88,7 @@ export function monthlyBreakdown(txs: TxForReport[]): MonthlyRow[] {
       row.fees += fee.toNumber();
       pos.qty = pos.qty.plus(qty);
       pos.cost = pos.cost.plus(qty.mul(price)).plus(fee);
-    } else if (tx.type === "sell") {
+    } else {
       row.soldProceeds += qty.mul(price).minus(fee).toNumber();
       row.fees += fee.toNumber();
       if (pos.qty.gt(0)) {
@@ -103,16 +100,12 @@ export function monthlyBreakdown(txs: TxForReport[]): MonthlyRow[] {
         pos.qty = pos.qty.minus(sellQty);
         if (pos.qty.isZero()) pos.cost = new Decimal(0);
       }
-    } else {
-      row.dividends += qty.toNumber();
-      row.fees += fee.toNumber();
     }
     positions.set(assetKey, pos);
 
     row.invested = Math.round(row.invested * 100) / 100;
     row.soldProceeds = Math.round(row.soldProceeds * 100) / 100;
     row.realizedPL = Math.round(row.realizedPL * 100) / 100;
-    row.dividends = Math.round(row.dividends * 100) / 100;
     row.fees = Math.round(row.fees * 100) / 100;
 
     map.set(month, row);

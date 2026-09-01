@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircleIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import {
   createTransactionAction,
   updateTransactionAction,
 } from "@/actions/transaction.actions";
+import { searchFundsAction } from "@/actions/fund.actions";
 import { Button } from "@/components/ui/button";
+import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/features/date-picker";
 import {
   Dialog,
@@ -37,6 +39,7 @@ import type { TxRow } from "@/lib/services/view-service";
 import { padDecimals } from "@/lib/utils/money";
 
 type Portfolio = { id: string; name: string };
+type FundOption = { value: string; label: string };
 
 export function TransactionDialog({
   portfolios,
@@ -51,13 +54,25 @@ export function TransactionDialog({
   const [open, setOpen] = useState(false);
   const [assetType, setAssetType] = useState(transaction?.asset.type ?? "stock");
   const [market, setMarket] = useState<"US" | "SET">(transaction?.asset.market ?? "US");
-  const [txType, setTxType] = useState<"buy" | "sell" | "dividend">(transaction?.type ?? "buy");
+  const [txType, setTxType] = useState<"buy" | "sell">(transaction?.type ?? "buy");
   const [portfolioId, setPortfolioId] = useState(
     transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0]?.id
   );
+  const [fundQuery, setFundQuery] = useState("");
+  const [fundRows, setFundRows] = useState<FundOption[]>([]);
+  const [fundValue, setFundValue] = useState<FundOption | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+
+  // fetch fund suggestions for the autocomplete (debounced)
+  useEffect(() => {
+    if (assetType !== "mutualfund" || !open) return;
+    const t = setTimeout(() => {
+      searchFundsAction(fundQuery).then(setFundRows).catch(() => setFundRows([]));
+    }, 150);
+    return () => clearTimeout(t);
+  }, [assetType, fundQuery, open]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -67,6 +82,12 @@ export function TransactionDialog({
       setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0]?.id);
       setAssetType(isEdit ? transaction.asset.type : "stock");
       setMarket(isEdit ? transaction.asset.market : "US");
+      setFundQuery("");
+      setFundValue(
+        isEdit && transaction.asset.type === "mutualfund"
+          ? { value: transaction.asset.symbol, label: transaction.asset.name }
+          : null
+      );
     }
   }
 
@@ -142,13 +163,12 @@ export function TransactionDialog({
                 <Select defaultValue={transaction?.type ?? "buy"} onValueChange={(v) => v && setTxType(v as typeof txType)}>
                   <SelectTrigger className="w-full">
                     <SelectValue>
-                      {(v) => ({ buy: "Buy", sell: "Sell", dividend: "Dividend" }[String(v)] ?? v)}
+                      {(v) => ({ buy: "Buy", sell: "Sell" }[String(v)] ?? v)}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="buy">Buy</SelectItem>
                     <SelectItem value="sell">Sell</SelectItem>
-                    <SelectItem value="dividend">Dividend</SelectItem>
                   </SelectContent>
                 </Select>
               </FieldContent>
@@ -206,25 +226,52 @@ export function TransactionDialog({
             <Field>
               <FieldLabel className="text-muted-foreground">Symbol</FieldLabel>
               <FieldContent>
-                <Input
-                  name="symbol"
-                  required
-                  defaultValue={transaction?.asset.symbol}
-                  placeholder={
-                    assetType === "crypto"
-                      ? "BTC"
-                      : assetType === "commodity"
-                        ? "XAUUSD=X (gold), CL=F (oil)"
-                        : assetType === "mutualfund"
-                          ? "B-EQUITY (Finnomena code)"
+                {assetType === "mutualfund" ? (
+                  <Combobox
+                    items={fundRows}
+                    value={fundValue}
+                    onValueChange={(v) => setFundValue(v as FundOption | null)}
+                    onInputValueChange={(v) => setFundQuery(v)}
+                    filter={null}
+                    itemToStringValue={(it) => (it as FundOption).value}
+                    itemToStringLabel={(it) => (it as FundOption).value}
+                  >
+                    <input type="hidden" name="symbol" value={fundValue?.value ?? ""} />
+                    <ComboboxInput
+                      placeholder="Search fund code or name…"
+                      showClear
+                      className="w-full"
+                    />
+                    <ComboboxContent className="w-[min(30rem,var(--available-width))] min-w-[min(30rem,var(--available-width))]">
+                      <ComboboxList>
+                        {fundRows.map((f) => (
+                          <ComboboxItem key={f.value} value={f} className="flex-col items-start">
+                            <span className="w-full whitespace-nowrap font-medium uppercase">{f.value}</span>
+                            <span className="w-full truncate text-muted-foreground">{f.label}</span>
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                ) : (
+                  <Input
+                    name="symbol"
+                    required
+                    defaultValue={transaction?.asset.symbol}
+                    placeholder={
+                      assetType === "crypto"
+                        ? "BTC"
+                        : assetType === "commodity"
+                          ? "XAUUSD=X (gold), CL=F (oil)"
                           : "AAPL / PTT.BK / TDEX.BK"
-                  }
-                  className="uppercase"
-                />
+                    }
+                    className="uppercase"
+                  />
+                )}
               </FieldContent>
             </Field>
 
-            {assetType === "crypto" && txType !== "dividend" && (
+            {assetType === "crypto" && (
               <Field>
                 <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
                 <FieldContent>
@@ -233,38 +280,25 @@ export function TransactionDialog({
               </Field>
             )}
 
-            {txType === "dividend" ? (
-              <Field>
-                <FieldLabel className="text-muted-foreground">Cash amount</FieldLabel>
-                <FieldContent>
-                  <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
-                </FieldContent>
-              </Field>
-            ) : (
-              <Field>
-                <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
-                <FieldContent>
-                  <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
-                </FieldContent>
-              </Field>
-            )}
+            <Field>
+              <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
+              <FieldContent>
+                <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
+              </FieldContent>
+            </Field>
 
-            {txType === "dividend" ? null : (
-              <>
-                <Field>
-                  <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>
-                  <FieldContent>
-                    <Input name="price" type="number" step="any" min="0" required defaultValue={padDecimals(transaction?.price)} />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
-                  <FieldContent>
-                    <Input name="fee" type="number" step="any" min="0" defaultValue={padDecimals(transaction?.fee, 4)} />
-                  </FieldContent>
-                </Field>
-              </>
-            )}
+            <Field>
+              <FieldLabel className="text-muted-foreground">Price / unit</FieldLabel>
+              <FieldContent>
+                <Input name="price" type="number" step="any" min="0" required defaultValue={padDecimals(transaction?.price)} />
+              </FieldContent>
+            </Field>
+            <Field>
+              <FieldLabel className="text-muted-foreground">Fee</FieldLabel>
+              <FieldContent>
+                <Input name="fee" type="number" step="any" min="0" defaultValue={padDecimals(transaction?.fee, 4)} />
+              </FieldContent>
+            </Field>
 
             <Field>
               <FieldLabel className="text-muted-foreground">Date</FieldLabel>

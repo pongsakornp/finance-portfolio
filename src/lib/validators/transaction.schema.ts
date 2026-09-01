@@ -34,7 +34,7 @@ export const transactionObjectSchema = z.object({
   assetName: z.string().min(1).max(80).optional(),
   externalId: z.string().max(60).optional(),
   market: z.enum(MARKETS).optional(),
-  type: z.enum(["buy", "sell", "dividend"]),
+  type: z.enum(["buy", "sell"]),
   quantity: z.coerce.number().finite("Must be a finite number").positive("Must be > 0"),
   price: z.coerce.number().finite("Must be a finite number").nonnegative("Must be >= 0"),
   fee: z.coerce.number().finite("Must be a finite number").nonnegative().default(0),
@@ -45,7 +45,7 @@ export const transactionObjectSchema = z.object({
 });
 
 export const createTransactionSchema = transactionObjectSchema.refine(
-  (data) => data.type === "dividend" || data.price > 0,
+  (data) => data.price > 0,
   { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
 );
 

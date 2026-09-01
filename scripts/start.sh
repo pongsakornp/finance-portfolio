@@ -25,6 +25,9 @@ free_port() {
 export DB_PORT="$(free_port 5432)"
 export APP_PORT="$(free_port 3000)"
 
+# Auth.js base URL: honor .env AUTH_URL, else derive the host origin (port is dynamic)
+export AUTH_URL="${AUTH_URL:-http://127.0.0.1:$APP_PORT}"
+
 docker compose -p "$ENV" up --build -d --force-recreate
 
 URL="http://127.0.0.1:$APP_PORT"
