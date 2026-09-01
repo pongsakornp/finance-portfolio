@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { alerts, assets } from "@/lib/db/schema";
 import { benchmarkSeries, warmAssetHistory } from "@/lib/services/valuation-service";
 import { warmFxHistory } from "@/lib/services/fx-service";
+import { backfillMutualFundNames, refreshFundCatalog } from "@/lib/services/fund-catalog-service";
 
 /** Refresh quote cache via alert checks and mark hit alerts as triggered. */
 async function checkAlerts() {
@@ -57,6 +58,7 @@ export function startCron() {
   cron.schedule("5 0 * * *", () => {
     void warmHistory();
     void warmFx();
+    void warmFunds();
   });
   // hourly: keep quote cache warm + evaluate alerts + fill benchmark cache
   cron.schedule("0 * * * *", () => {
@@ -80,5 +82,14 @@ async function warmFx() {
     await warmFxHistory();
   } catch (e) {
     console.error("[cron] FX history warm failed:", e);
+  }
+}
+
+async function warmFunds() {
+  try {
+    await refreshFundCatalog();
+    await backfillMutualFundNames();
+  } catch (e) {
+    console.error("[cron] fund catalog refresh failed:", e);
   }
 }

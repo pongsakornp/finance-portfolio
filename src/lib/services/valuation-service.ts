@@ -163,7 +163,7 @@ async function loadCloses(
 }
 
 export type TxWithAsset = {
-  type: "buy" | "sell" | "dividend";
+  type: "buy" | "sell";
   quantity: string;
   price: string;
   fee: string;

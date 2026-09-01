@@ -47,7 +47,7 @@ const mcpTxObjectSchema = transactionObjectSchema.extend({
   occurredAt: z.iso.datetime(),
 });
 const mcpTxSchema = mcpTxObjectSchema.refine(
-  (data) => data.type === "dividend" || data.price > 0,
+  (data) => data.price > 0,
   { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
 );
 
@@ -77,7 +77,7 @@ export function buildMcpServer(userId: string): McpServer {
     "list_portfolios",
     {
       description:
-        "List the user's portfolios with USD totals: market value, cost basis, unrealized/realized P/L, dividends, day change.",
+        "List the user's portfolios with USD totals: market value, cost basis, unrealized/realized P/L, day change.",
       inputSchema: {},
     },
     async () => {
@@ -124,7 +124,6 @@ export function buildMcpServer(userId: string): McpServer {
               unrealizedPL: r.valueUsd - r.costUsd,
               unrealizedPLPct: r.position.unrealizedPLPct,
               realizedPL: r.position.realizedPL,
-              dividendsReceived: r.position.dividendsReceived,
             }))
           )
         );
@@ -145,7 +144,7 @@ export function buildMcpServer(userId: string): McpServer {
       try {
         const views = await loadViews(userId, portfolioId);
         const t = views.map((v) => v.view.totalsUsd);
-        const sum = (k: "marketValue" | "costBasis" | "realizedPL" | "dividendsReceived" | "dayChange") =>
+        const sum = (k: "marketValue" | "costBasis" | "realizedPL" | "dayChange") =>
           t.reduce((a, x) => a + x[k], 0);
         const mv = sum("marketValue");
         const cost = sum("costBasis");
@@ -159,7 +158,6 @@ export function buildMcpServer(userId: string): McpServer {
               unrealizedPL: Math.round((mv - cost) * 100) / 100,
               unrealizedPLPct: cost > 0 ? parseFloat(((mv - cost) / cost * 100).toFixed(2)) : 0,
               realizedPL: sum("realizedPL"),
-              dividendsReceived: sum("dividendsReceived"),
               dayChange: Math.round(dayChange * 100) / 100,
               dayChangePct: prevMv > 0 ? parseFloat((dayChange / prevMv * 100).toFixed(2)) : 0,
             };
@@ -174,7 +172,7 @@ export function buildMcpServer(userId: string): McpServer {
     "get_transactions",
     {
       description:
-        "Transaction ledger, oldest first. Filter by portfolio/symbol/since. Dividend rows carry the cash amount in `quantity`.",
+        "Transaction ledger, oldest first. Filter by portfolio/symbol/since.",
       inputSchema: {
         portfolioId: z.uuid().optional(),
         symbol: z.string().max(20).optional(),
@@ -265,7 +263,7 @@ export function buildMcpServer(userId: string): McpServer {
     "get_monthly_report",
     {
       description:
-        "Monthly invested/sold/dividends/fees breakdown. Amounts in each asset's native currency (not converted).",
+        "Monthly invested/sold/fees breakdown. Amounts in each asset's native currency (not converted).",
       inputSchema: { portfolioId: z.uuid().optional() },
     },
     async ({ portfolioId }) => {
@@ -411,7 +409,7 @@ export function buildMcpServer(userId: string): McpServer {
     "add_transaction",
     {
       description:
-        "Record buy/sell/dividend. buy/sell take quantity in units + price per unit; dividend takes the cash amount in `quantity` (price ignored, fee optional). occurredAt is an ISO datetime.",
+        "Record a buy or sell. buy/sell take quantity in units + price per unit. occurredAt is an ISO datetime.",
       inputSchema: mcpTxObjectSchema.shape,
     },
     async (args) => {

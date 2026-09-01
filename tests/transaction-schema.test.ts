@@ -29,11 +29,11 @@ describe("createTransactionSchema", () => {
     expect(res.success).toBe(false);
   });
 
-  it("accepts dividend transaction with price 0", () => {
+  it("accepts buy transaction with price > 0", () => {
     const res = createTransactionSchema.safeParse({
       ...base,
-      type: "dividend",
-      price: 0,
+      type: "buy",
+      price: 150,
     });
     expect(res.success).toBe(true);
   });

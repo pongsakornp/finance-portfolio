@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
+import { DownloadIcon } from "lucide-react";
 
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
@@ -9,6 +10,7 @@ import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -71,7 +73,6 @@ export default async function PortfolioDetailPage({
   const view = await buildHoldingsView(txs);
   const t = view.totalsUsd;
   const rate = await baseRate(baseCurrency);
-  const money = (usd: number) => fmtMoney(Math.round(usd * rate * 100) / 100, baseCurrency);
   const holdings = [...view.rows].filter((r) => r.position.qty > 0);
   const ledger = [...txs].reverse();
 
@@ -83,6 +84,9 @@ export default async function PortfolioDetailPage({
         </div>
         <div className="flex items-center gap-2">
           <RenamePortfolioDialog id={id} initialName={row.name} />
+          <Button variant="ghost" size="icon" render={<a href={`/api/export?portfolio=${id}`} download aria-label="Export" />}>
+            <DownloadIcon className="text-muted-foreground" />
+          </Button>
           <DeleteButton
             action={deletePortfolioAction.bind(null, id)}
             confirmText={`Delete "${row.name}" and all its transactions?`}
@@ -108,9 +112,8 @@ export default async function PortfolioDetailPage({
           footerClassName="text-sm"
         />
         <StatCard
-          label="Realized + Dividends"
-          title={<PL value={(t.realizedPL + t.dividendsReceived) * rate} currency={baseCurrency} compact />}
-          footer={`Dividends ${money(t.dividendsReceived)}`}
+          label="Realized"
+          title={<PL value={t.realizedPL * rate} currency={baseCurrency} compact />}
         />
       </div>
 
@@ -196,14 +199,17 @@ export default async function PortfolioDetailPage({
                             {tx.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium">{tx.asset.symbol}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {tx.type === "dividend"
-                            ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                            : fmtQty(parseFloat(tx.quantity))}
+                        <TableCell className="font-medium">
+                          {tx.asset.name !== tx.asset.symbol && (
+                            <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
+                          )}
+                          {tx.asset.name}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {tx.type === "dividend" ? "—" : fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                          {fmtQty(parseFloat(tx.quantity))}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
@@ -224,7 +230,7 @@ export default async function PortfolioDetailPage({
                         <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
                         <Badge
                           variant={
-                            tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
+                            tx.type === "buy" ? "default" : "warning"
                           }
                           className="capitalize"
                         >
@@ -233,19 +239,20 @@ export default async function PortfolioDetailPage({
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <span className="font-medium">{tx.asset.symbol}</span>
+                          <span className="font-medium">
+                            {tx.asset.name !== tx.asset.symbol && (
+                              <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
+                            )}
+                            {tx.asset.name}
+                          </span>
                           <span className="text-sm text-muted-foreground"> · </span>
                           <span className="tabular-nums">
-                            {tx.type === "dividend"
-                              ? fmtMoney(parseFloat(tx.quantity), tx.asset.currency)
-                              : fmtQty(parseFloat(tx.quantity))}
+                            {fmtQty(parseFloat(tx.quantity))}
                           </span>
-                          {tx.type !== "dividend" && (
-                            <span className="tabular-nums text-muted-foreground">
-                              {" "}
-                              @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                            </span>
-                          )}
+                          <span className="tabular-nums text-muted-foreground">
+                            {" "}
+                            @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-end gap-1">
                           <TransactionDialog portfolios={portfoliosList} transaction={tx} />

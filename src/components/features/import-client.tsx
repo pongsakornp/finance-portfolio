@@ -2,10 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Papa from "papaparse";
 import { toast } from "sonner";
 
-import { MARKETS, ASSET_TYPES } from "@/lib/validators/transaction.schema";import { importTransactionsAction } from "@/actions/transaction.actions";
+import { importTransactionsAction, type ImportRow } from "@/actions/transaction.actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -25,28 +24,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type ParsedRow = {
-  symbol: string;
-  name?: string;
-  assetType: (typeof ASSET_TYPES)[number];
-  type: "buy" | "sell" | "dividend";
-  quantity: number;
-  price: number;
-  fee: number;
-  occurredAt: string;
-  currency?: string; // cash only
-  market?: (typeof MARKETS)[number];
-  note?: string;
-};
-
-const TEMPLATE = `symbol,name,asset_type,type,quantity,price,fee,date,currency,market
-AAPL,,stock,buy,10,150.25,1.99,2025-06-01,,US
-BTC,Bitcoin,crypto,buy,0.5,60000,0,2025-07-15,,US
-XAUUSD=X,Gold,commodity,buy,1,2400,0,2025-08-01,,US
-PTT.BK,,stock,buy,100,40.5,5,2025-08-20,,SET`;
+const SAMPLES: ImportRow[] = [
+  { symbol: "AAPL", assetType: "stock", type: "buy", quantity: 10, price: 150.25, fee: 1.99, occurredAt: "2025-06-01", currency: "USD", market: "US", note: "" },
+  { symbol: "BTC", name: "Bitcoin", assetType: "crypto", type: "buy", quantity: 0.5, price: 60000, fee: 0, occurredAt: "2025-07-15", currency: "USD", market: "US" },
+  { symbol: "XAUUSD=X", name: "Gold", assetType: "commodity", type: "buy", quantity: 1, price: 2400, fee: 0, occurredAt: "2025-08-01", currency: "USD", market: "US" },
+  { symbol: "PTT.BK", assetType: "stock", type: "buy", quantity: 100, price: 40.5, fee: 5, occurredAt: "2025-08-20", currency: "THB", market: "SET" },
+];
 
 export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; name: string }> }) {
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<ImportRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [portfolioId, setPortfolioId] = useState(portfolios[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
@@ -55,35 +41,14 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
 
   function parseFile(file: File) {
     setFileName(file.name);
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (result) => {
-        const parsed: ParsedRow[] = [];
-        for (const r of result.data) {
-          const at = (r.asset_type ?? r.assetType ?? "").toLowerCase().trim();
-          if (!r.symbol || !at) continue;
-          const t = (r.type ?? r.action ?? "").toLowerCase().trim();
-          if (!["buy", "sell", "dividend"].includes(t)) continue;
-          parsed.push({
-            symbol: r.symbol.trim().toUpperCase(),
-            name: r.name?.trim() || undefined,
-            assetType: at as ParsedRow["assetType"],
-            type: t as ParsedRow["type"],
-            quantity: parseFloat(r.quantity),
-            price: parseFloat(r.price ?? "0") || 0,
-            fee: parseFloat(r.fee ?? "0") || 0,
-            occurredAt: (r.date ?? r.occurred_at ?? "").trim(),
-            currency: r.currency?.trim().toUpperCase() || undefined,
-            market: MARKETS.includes(r.market?.trim().toUpperCase() as (typeof MARKETS)[number])
-              ? (r.market.trim().toUpperCase() as (typeof MARKETS)[number])
-              : undefined,
-            note: r.note?.trim() || undefined,
-          });
-        }
-        setRows(parsed.filter((p) => !isNaN(p.quantity)));
-      },
-      error: () => toast.error("Failed to read CSV"),
+    file.text().then((text) => {
+      try {
+        const data = JSON.parse(text);
+        if (!Array.isArray(data)) throw new Error("Expected an array of transactions");
+        setRows(data as ImportRow[]);
+      } catch (e) {
+        toast.error(`Failed to parse JSON: ${e instanceof Error ? e.message : ""}`);
+      }
     });
   }
 
@@ -100,11 +65,11 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
   }
 
   function downloadTemplate() {
-    const blob = new Blob([TEMPLATE], { type: "text/csv" });
+    const blob = new Blob([JSON.stringify(SAMPLES, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "transactions-template.csv";
+    a.download = "transactions-template.json";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -112,18 +77,18 @@ export function ImportClient({ portfolios }: { portfolios: Array<{ id: string; n
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="csv">Upload CSV</Label>
+        <Label htmlFor="json">Upload JSON</Label>
         <label
-          htmlFor="csv"
+          htmlFor="json"
           className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
-          <span className="font-medium text-foreground">{fileName || "Choose a CSV file"}</span>
+          <span className="font-medium text-foreground">{fileName || "Choose a JSON file"}</span>
         </label>
         <input
-          id="csv"
+          id="json"
           ref={fileRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".json,application/json"
           className="hidden"
           onChange={(e) => e.target.files?.[0] && parseFile(e.target.files[0])}
         />

@@ -70,12 +70,12 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base">Import / Export</CardTitle>
           <CardDescription>
-            Import transactions from CSV, or export all transactions to CSV.
+            Import transactions from JSON, or export all transactions to JSON.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <div className="text-sm font-medium">Export CSV</div>
+            <div className="text-sm font-medium">Export JSON</div>
             <Button variant="outline" render={<a href="/api/export" download />}>
               <DownloadIcon className="h-4 w-4" />
               Download transactions

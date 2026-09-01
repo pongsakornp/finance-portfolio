@@ -24,7 +24,6 @@ const buildHoldingsView = vi.hoisted(() =>
       unrealizedPL: 0,
       unrealizedPLPct: 0,
       realizedPL: 0,
-      dividendsReceived: 0,
       dayChange: 0,
       dayChangePct: 0,
     },
@@ -124,7 +123,7 @@ describe("MCP tools", () => {
       rows: [
         {
           asset: { symbol: "AAPL", name: "Apple", type: "stock", currency: "USD" },
-          position: { qty: 10, avgCost: 150, costBasis: 1500, marketValue: 1600, unrealizedPL: 100, unrealizedPLPct: 6.67, realizedPL: 0, dividendsReceived: 0, currentPrice: 160 },
+          position: { qty: 10, avgCost: 150, costBasis: 1500, marketValue: 1600, unrealizedPL: 100, unrealizedPLPct: 6.67, realizedPL: 0, currentPrice: 160 },
           price: 160,
           previousClose: 158,
           valueUsd: 1600,
@@ -132,7 +131,7 @@ describe("MCP tools", () => {
         },
         {
           asset: { symbol: "TSLA", name: "Tesla", type: "stock", currency: "USD" },
-          position: { qty: 0, avgCost: 0, costBasis: 0, marketValue: 0, unrealizedPL: 0, unrealizedPLPct: 0, realizedPL: 50, dividendsReceived: 0, currentPrice: 200 },
+          position: { qty: 0, avgCost: 0, costBasis: 0, marketValue: 0, unrealizedPL: 0, unrealizedPLPct: 0, realizedPL: 50, currentPrice: 200 },
           price: 200,
           previousClose: 195,
           valueUsd: 0,
@@ -145,7 +144,6 @@ describe("MCP tools", () => {
         unrealizedPL: 100,
         unrealizedPLPct: 6.67,
         realizedPL: 50,
-        dividendsReceived: 0,
         dayChange: 20,
         dayChangePct: 1.25,
       },
@@ -171,7 +169,7 @@ describe("MCP tools", () => {
         rows: [
           {
             asset: { symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD" },
-            position: { qty: 0, avgCost: 0, costBasis: 0, marketValue: 0, unrealizedPL: 0, unrealizedPLPct: 0, realizedPL: 200, dividendsReceived: 0, currentPrice: 60000 },
+            position: { qty: 0, avgCost: 0, costBasis: 0, marketValue: 0, unrealizedPL: 0, unrealizedPLPct: 0, realizedPL: 200, currentPrice: 60000 },
             price: 60000,
             previousClose: 59000,
             valueUsd: 0,
@@ -184,7 +182,7 @@ describe("MCP tools", () => {
         rows: [
           {
             asset: { symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD" },
-            position: { qty: 2, avgCost: 50000, costBasis: 100000, marketValue: 120000, unrealizedPL: 20000, unrealizedPLPct: 20, realizedPL: 0, dividendsReceived: 0, currentPrice: 60000 },
+            position: { qty: 2, avgCost: 50000, costBasis: 100000, marketValue: 120000, unrealizedPL: 20000, unrealizedPLPct: 20, realizedPL: 0, currentPrice: 60000 },
             price: 60000,
             previousClose: 59000,
             valueUsd: 120000,
