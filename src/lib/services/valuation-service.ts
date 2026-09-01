@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 
 import { db } from "@/lib/db";
@@ -94,13 +94,19 @@ async function finnomenaStockHistory(symbol: string): Promise<Map<string, number
 /** Backfills daily closes into price_history when stale (>3 days). */
 async function ensureHistory(asset: Asset): Promise<void> {
   const cutoff = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
-  const [latest] = await db
+  const [historical] = await db
     .select({ day: priceHistory.day })
     .from(priceHistory)
-    .where(eq(priceHistory.assetId, asset.id))
+    .where(
+      and(
+        eq(priceHistory.assetId, asset.id),
+        eq(priceHistory.source, 1),
+        lt(priceHistory.day, cutoff),
+      )
+    )
     .orderBy(desc(priceHistory.day))
     .limit(1);
-  if (latest && latest.day >= cutoff) return;
+  if (historical) return; // official close history already backfilled
 
   try {
     const closes =
