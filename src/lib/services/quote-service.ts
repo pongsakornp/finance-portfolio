@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, priceCache, priceHistory } from "@/lib/db/schema";
@@ -16,6 +16,8 @@ export type Quote = {
   previousClose: number | null;
 };
 
+type FetchResult = { price: number; previousClose: number | null; currency: string; name?: string | null };
+
 type YahooChart = {
   chart: {
     result?: Array<{
@@ -24,13 +26,15 @@ type YahooChart = {
         chartPreviousClose?: number;
         previousClose?: number;
         currency: string;
+        longName?: string;
+        shortName?: string;
       };
     }>;
     error?: unknown;
   };
 };
 
-async function fetchYahoo(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+async function fetchYahoo(symbol: string): Promise<FetchResult> {
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`,
     { headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" }, cache: "no-store" }
@@ -43,10 +47,11 @@ async function fetchYahoo(symbol: string): Promise<{ price: number; previousClos
     price: meta.regularMarketPrice,
     previousClose: meta.previousClose ?? meta.chartPreviousClose ?? null,
     currency: meta.currency === "GBp" ? "GBX" : (meta.currency ?? "USD"),
+    name: meta.longName ?? meta.shortName ?? null,
   };
 }
 
-async function fetchCoinGecko(id: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+async function fetchCoinGecko(id: string): Promise<FetchResult> {
   const res = await fetch(
     `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd&include_24hr_change=true`,
     { cache: "no-store" }
@@ -78,7 +83,7 @@ type FinnomenaHistory = {
  * NAV updates once daily EOD — price = latest close, previousClose = prior day.
  * ponytail: undocumented endpoint, may change without notice; stale-cache fallback covers outages.
  */
-async function fetchFinnomena(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+async function fetchFinnomena(symbol: string): Promise<FetchResult> {
   const to = Math.floor(Date.now() / 1000) + 86400;
   const from = to - 14 * 86400;
   const res = await fetch(
@@ -119,7 +124,7 @@ type FinnomenaStock = {
  * Bare symbol (no `.BK`). `price` + `perf_1d` (day change) derive previousClose.
  * ponytail: undocumented endpoint, may change without notice; Yahoo fallback + stale cache cover outages.
  */
-async function fetchFinnomenaStock(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+async function fetchFinnomenaStock(symbol: string): Promise<FetchResult> {
   const res = await fetch(
     `https://www.finnomena.com/market-info/api/public/stock/quote/${encodeURIComponent(symbol)}`,
     { headers: { Accept: "application/json" }, cache: "no-store" }
@@ -144,7 +149,7 @@ async function fetchFinnomenaStock(symbol: string): Promise<{ price: number; pre
  * Open-end Thai mutual funds (no exchange listing) are priced separately via
  * Finnomena — that path lives in the `mutualfund` branch, not here. Both return THB.
  */
-async function fetchSet(symbol: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
+async function fetchSet(symbol: string): Promise<FetchResult> {
   const bare = symbol.replace(/\.BK$/, "");
   return fetchFinnomenaStock(bare).catch(() => fetchYahoo(setYahooSymbol(symbol)));
 }
@@ -214,7 +219,7 @@ export async function getQuote(asset: Asset): Promise<Quote> {
         },
       });
 
-    // P5: keep the daily series current. Live/intraday price → source=2 (official
+    // Keep the daily series current. Live/intraday price → source=2 (official
     // close from ensureHistory overwrites it next day). Skip weekend rows for
     // market-hours assets to avoid spurious points.
     const seriesDay = quoteSeriesDay(asset.type);
@@ -228,6 +233,16 @@ export async function getQuote(asset: Asset): Promise<Quote> {
           source: 2,
         })
         .onConflictDoNothing();
+    }
+
+    // Fill a name still stuck at its symbol (no name input for stock/ETF/crypto).
+    if (asset.name === asset.symbol && fresh.name) {
+      // Yahoo appends the market suffix for crypto (e.g. "Bitcoin USD") — drop it.
+      const name =
+        asset.type === "crypto" && fresh.name.endsWith(" USD")
+          ? fresh.name.slice(0, -4)
+          : fresh.name;
+      await db.update(assets).set({ name }).where(eq(assets.id, asset.id));
     }
 
     return {
