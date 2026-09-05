@@ -21,9 +21,13 @@ export const upsertAssetSchema = z.object({
   currency: z.string().length(3).default("USD"),
   market: z.enum(MARKETS).default("US"),
   externalId: z.string().max(60).optional(),
+}).superRefine((data, ctx) => {
+  if (data.type === "crypto" && !/^[1-9]\d*$/.test(data.externalId ?? "")) {
+    ctx.addIssue({ code: "custom", path: ["externalId"], message: "CoinMarketCap ID is required" });
+  }
 });
 
-export const transactionObjectSchema = z.object({
+export const transactionObjectBaseSchema = z.object({
   portfolioId: z.uuid(),
   symbol: z
     .string()
@@ -42,6 +46,12 @@ export const transactionObjectSchema = z.object({
     message: "Invalid date",
   }),
   note: z.string().max(200).optional(),
+});
+
+export const transactionObjectSchema = transactionObjectBaseSchema.superRefine((data, ctx) => {
+  if (data.assetType === "crypto" && !/^[1-9]\d*$/.test(data.externalId ?? "")) {
+    ctx.addIssue({ code: "custom", path: ["externalId"], message: "CoinMarketCap ID is required" });
+  }
 });
 
 export const createTransactionSchema = transactionObjectSchema.refine(

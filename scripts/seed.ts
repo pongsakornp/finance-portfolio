@@ -54,8 +54,8 @@ async function main() {
     aapl: await upsertAsset({ symbol: "AAPL", name: "Apple Inc.", type: "stock", currency: "USD" }),
     msft: await upsertAsset({ symbol: "MSFT", name: "Microsoft Corp.", type: "stock", currency: "USD" }),
     spy: await upsertAsset({ symbol: "SPY", name: "SPDR S&P 500 ETF", type: "etf", currency: "USD" }),
-    btc: await upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD", externalId: "bitcoin" }),
-    eth: await upsertAsset({ symbol: "ETH", name: "Ethereum", type: "crypto", currency: "USD", externalId: "ethereum" }),
+    btc: await upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", currency: "USD", externalId: "1" }),
+    eth: await upsertAsset({ symbol: "ETH", name: "Ethereum", type: "crypto", currency: "USD", externalId: "1027" }),
     ptt: await upsertAsset({ symbol: "PTT.BK", name: "PTT PCL", type: "stock", currency: "THB", market: "SET" }),
     bequity: await upsertAsset({
       symbol: "B-EQUITY",

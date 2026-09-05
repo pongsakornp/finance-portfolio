@@ -57,7 +57,7 @@ export const assets = pgTable(
     type: assetTypeEnum("type").notNull(),
     currency: text("currency").notNull().default("USD"),
     market: marketEnum("market").notNull().default("US"), // US | SET (Stock Exchange of Thailand)
-    externalId: text("external_id"), // CoinGecko id (crypto only), e.g. "bitcoin"
+    externalId: text("external_id"), // CoinMarketCap numeric ID (crypto only), e.g. "1"
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -182,3 +182,17 @@ export const fundCatalog = pgTable("fund_catalog", {
     .notNull()
     .defaultNow(),
 });
+
+// CoinMarketCap registry: cmc_id is the stable identifier used for crypto quotes.
+export const cryptoCatalog = pgTable(
+  "crypto_catalog",
+  {
+    cmcId: text("cmc_id").primaryKey(),
+    symbol: text("symbol").notNull(),
+    name: text("name").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("crypto_catalog_symbol_idx").on(t.symbol)]
+);

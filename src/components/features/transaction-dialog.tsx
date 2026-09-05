@@ -9,6 +9,7 @@ import {
   createTransactionAction,
   updateTransactionAction,
 } from "@/actions/transaction.actions";
+import { searchCryptoAssetsAction, type CryptoOption } from "@/actions/crypto.actions";
 import { searchFundsAction } from "@/actions/fund.actions";
 import { Button } from "@/components/ui/button";
 import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
@@ -25,6 +26,7 @@ import {
 import {
   Field,
   FieldContent,
+  FieldDescription,
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -61,6 +63,9 @@ export function TransactionDialog({
   const [fundQuery, setFundQuery] = useState("");
   const [fundRows, setFundRows] = useState<FundOption[]>([]);
   const [fundValue, setFundValue] = useState<FundOption | null>(null);
+  const [cryptoQuery, setCryptoQuery] = useState("");
+  const [cryptoRows, setCryptoRows] = useState<CryptoOption[]>([]);
+  const [cryptoValue, setCryptoValue] = useState<CryptoOption | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -74,6 +79,15 @@ export function TransactionDialog({
     return () => clearTimeout(t);
   }, [assetType, fundQuery, open]);
 
+  // CMC catalog suggestions are DB-backed; the service warms an empty catalog once.
+  useEffect(() => {
+    if (assetType !== "crypto" || !open) return;
+    const t = setTimeout(() => {
+      searchCryptoAssetsAction(cryptoQuery).then(setCryptoRows).catch(() => setCryptoRows([]));
+    }, 150);
+    return () => clearTimeout(t);
+  }, [assetType, cryptoQuery, open]);
+
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
@@ -86,6 +100,12 @@ export function TransactionDialog({
       setFundValue(
         isEdit && transaction.asset.type === "mutualfund"
           ? { value: transaction.asset.symbol, label: transaction.asset.name }
+          : null
+      );
+      setCryptoQuery("");
+      setCryptoValue(
+        isEdit && transaction.asset.type === "crypto" && transaction.asset.externalId
+          ? { value: transaction.asset.symbol, label: transaction.asset.name, cmcId: transaction.asset.externalId }
           : null
       );
     }
@@ -253,15 +273,42 @@ export function TransactionDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                ) : assetType === "crypto" ? (
+                  <Combobox
+                    items={cryptoRows}
+                    value={cryptoValue}
+                    onValueChange={(v) => setCryptoValue(v as CryptoOption | null)}
+                    onInputValueChange={(v) => setCryptoQuery(v)}
+                    filter={null}
+                    itemToStringValue={(it) => (it as CryptoOption).value}
+                    itemToStringLabel={(it) => (it as CryptoOption).value}
+                  >
+                    <input type="hidden" name="symbol" value={cryptoValue?.value ?? ""} />
+                    <input type="hidden" name="assetName" value={cryptoValue?.label ?? ""} />
+                    <input type="hidden" name="externalId" value={cryptoValue?.cmcId ?? ""} />
+                    <ComboboxInput
+                      placeholder="Search crypto symbol or name…"
+                      showClear
+                      className="w-full"
+                    />
+                    <ComboboxContent className="w-[min(30rem,var(--available-width))] min-w-[min(30rem,var(--available-width))]">
+                      <ComboboxList>
+                        {cryptoRows.map((crypto) => (
+                          <ComboboxItem key={crypto.cmcId} value={crypto} className="flex-col items-start">
+                            <span className="w-full whitespace-nowrap font-medium uppercase">{crypto.value}</span>
+                            <span className="w-full truncate text-muted-foreground">{crypto.label}</span>
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
                 ) : (
                   <Input
                     name="symbol"
                     required
                     defaultValue={transaction?.asset.symbol}
                     placeholder={
-                      assetType === "crypto"
-                        ? "BTC"
-                        : assetType === "commodity"
+                      assetType === "commodity"
                           ? "XAUUSD=X (gold), CL=F (oil)"
                           : "AAPL / PTT.BK / TDEX.BK"
                     }
@@ -269,16 +316,12 @@ export function TransactionDialog({
                   />
                 )}
               </FieldContent>
+              {assetType === "crypto" && (
+                <FieldDescription>
+                  Select an asset to save its verified CoinMarketCap ID automatically.
+                </FieldDescription>
+              )}
             </Field>
-
-            {assetType === "crypto" && (
-              <Field>
-                <FieldLabel className="text-muted-foreground">CoinGecko ID</FieldLabel>
-                <FieldContent>
-                  <Input name="externalId" placeholder="bitcoin (optional)" defaultValue={transaction?.asset.externalId ?? ""} />
-                </FieldContent>
-              </Field>
-            )}
 
             <Field>
               <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>

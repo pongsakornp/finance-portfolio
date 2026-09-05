@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { assets, benchmarkCache, priceHistory } from "@/lib/db/schema";
 import type { Asset } from "@/lib/services/quote-service";
 import { setYahooSymbol } from "@/lib/services/quote-service";
+import { fetchCoinMarketCapHistory } from "@/lib/services/coinmarketcap-service";
 import { getRate, loadFxHistory } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
 
@@ -43,15 +44,10 @@ async function yahooChart(url: string): Promise<Map<string, number>> {
   return out;
 }
 
-async function coingeckoHistory(id: string): Promise<Map<string, number>> {
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${HISTORY_YEARS * 365}&interval=daily`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) throw new Error(`CoinGecko history ${id}: HTTP ${res.status}`);
-  const json = (await res.json()) as { prices?: [number, number][] };
+async function coinMarketCapHistory(id: string): Promise<Map<string, number>> {
+  const points = await fetchCoinMarketCapHistory(id, HISTORY_YEARS);
   const out = new Map<string, number>();
-  json.prices?.forEach(([ms, price]) => out.set(dayKey(new Date(ms)), price));
+  points.forEach(({ timestamp, price }) => out.set(dayKey(new Date(timestamp)), price));
   return out;
 }
 
@@ -112,8 +108,8 @@ async function ensureHistory(asset: Asset): Promise<void> {
     const closes =
       asset.type === "crypto"
         ? asset.externalId
-          ? await coingeckoHistory(asset.externalId)
-          : await yahooHistory(`${asset.symbol}-USD`)
+          ? await coinMarketCapHistory(asset.externalId)
+          : new Map<string, number>()
         : asset.type === "mutualfund"
           ? await finnomenaHistory(asset.symbol)
           : asset.market === "SET"

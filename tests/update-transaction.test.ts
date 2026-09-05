@@ -51,13 +51,13 @@ describe("upsertAsset", () => {
     expect(db.delete).not.toHaveBeenCalled();
   });
 
-  it("does not overwrite a shared asset's CoinGecko id or touch the cache", async () => {
-    selectResolves([{ id: "asset-1", currency: "USD", externalId: "bitcoin" }]);
+  it("does not overwrite a shared asset's CoinMarketCap ID or touch the cache", async () => {
+    selectResolves([{ id: "asset-1", currency: "USD", externalId: "1" }]);
     vi.mocked(db.update).mockClear();
     vi.mocked(db.delete).mockClear();
 
     await expect(
-      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "bitcoin-cash" })
+      upsertAsset({ symbol: "BTC", name: "Bitcoin", type: "crypto", externalId: "145" })
     ).resolves.toBe("asset-1");
 
     expect(db.update).not.toHaveBeenCalled();

@@ -24,7 +24,7 @@ import {
 } from "@/lib/validators/alert.schema";
 import {
   ASSET_TYPES,
-  transactionObjectSchema,
+  transactionObjectBaseSchema,
 } from "@/lib/validators/transaction.schema";
 
 const okJson = (data: unknown) => ({
@@ -43,13 +43,19 @@ function revalidateMutated() {
 }
 
 // z.coerce.date() can't serialize to JSON Schema (breaks tools/list) — ISO strings over the wire
-const mcpTxObjectSchema = transactionObjectSchema.extend({
+const mcpTxObjectSchema = transactionObjectBaseSchema.extend({
   occurredAt: z.iso.datetime(),
 });
-const mcpTxSchema = mcpTxObjectSchema.refine(
-  (data) => data.price > 0,
-  { message: "Price must be > 0 for buy and sell transactions", path: ["price"] }
-);
+const mcpTxSchema = mcpTxObjectSchema
+  .superRefine((data, ctx) => {
+    if (data.assetType === "crypto" && !/^[1-9]\d*$/.test(data.externalId ?? "")) {
+      ctx.addIssue({ code: "custom", path: ["externalId"], message: "CoinMarketCap ID is required" });
+    }
+  })
+  .refine((data) => data.price > 0, {
+    message: "Price must be > 0 for buy and sell transactions",
+    path: ["price"],
+  });
 
 /** Loads holdings views scoped to the user; throws when portfolioId is foreign. */
 async function loadViews(userId: string, portfolioId?: string) {
@@ -409,7 +415,7 @@ export function buildMcpServer(userId: string): McpServer {
     "add_transaction",
     {
       description:
-        "Record a buy or sell. buy/sell take quantity in units + price per unit. occurredAt is an ISO datetime.",
+        "Record a buy or sell. buy/sell take quantity in units + price per unit. Crypto assets require a numeric CoinMarketCap ID. occurredAt is an ISO datetime.",
       inputSchema: mcpTxObjectSchema.shape,
     },
     async (args) => {
@@ -455,7 +461,7 @@ export function buildMcpServer(userId: string): McpServer {
       inputSchema: {
         portfolioId: z.uuid(),
         rows: z.array(
-          transactionObjectSchema
+          transactionObjectBaseSchema
             .omit({ portfolioId: true, occurredAt: true })
             .extend({ occurredAt: z.iso.datetime() })
         ),

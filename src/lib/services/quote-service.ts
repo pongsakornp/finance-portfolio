@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, priceCache, priceHistory } from "@/lib/db/schema";
+import { fetchCoinMarketCapQuote } from "@/lib/services/coinmarketcap-service";
 import { dayKey } from "@/lib/utils/date";
 
 export type Asset = typeof assets.$inferSelect;
@@ -43,27 +44,6 @@ async function fetchYahoo(symbol: string): Promise<{ price: number; previousClos
     price: meta.regularMarketPrice,
     previousClose: meta.previousClose ?? meta.chartPreviousClose ?? null,
     currency: meta.currency === "GBp" ? "GBX" : (meta.currency ?? "USD"),
-  };
-}
-
-async function fetchCoinGecko(id: string): Promise<{ price: number; previousClose: number | null; currency: string }> {
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd&include_24hr_change=true`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) throw new Error(`CoinGecko ${id}: HTTP ${res.status}`);
-  const json = (await res.json()) as Record<string, { usd: number; usd_24h_change?: number }>;
-  const entry = json[id];
-  if (!entry?.usd) throw new Error(`CoinGecko ${id}: no price`);
-  return {
-    price: entry.usd,
-    previousClose:
-      entry.usd_24h_change != null
-        ? entry.usd_24h_change === -100
-          ? 0
-          : entry.usd / (1 + entry.usd_24h_change / 100)
-        : null,
-    currency: "USD",
   };
 }
 
@@ -163,7 +143,7 @@ function ttlFor(type: Asset["type"]): number {
   return 5 * 60_000;
 }
 
-/** Quote with DB-backed TTL cache. All pages go through this — never call Yahoo/CoinGecko directly. */
+/** Quote with DB-backed TTL cache. All pages go through this — never call providers directly. */
 export async function getQuote(asset: Asset): Promise<Quote> {
   const base = { assetId: asset.id, symbol: asset.symbol, name: asset.name, type: asset.type };
 
@@ -186,8 +166,10 @@ export async function getQuote(asset: Asset): Promise<Quote> {
     const fresh =
       asset.type === "crypto"
         ? asset.externalId
-          ? await fetchCoinGecko(asset.externalId)
-          : await fetchYahoo(`${asset.symbol}-USD`)
+          ? await fetchCoinMarketCapQuote(asset.externalId)
+          : (() => {
+              throw new Error(`CoinMarketCap ID is required for ${asset.symbol}`);
+            })()
         : asset.type === "mutualfund"
           ? await fetchFinnomena(asset.symbol)
           : asset.market === "SET"
