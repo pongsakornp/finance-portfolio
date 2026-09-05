@@ -26,7 +26,7 @@ import {
 
 const SAMPLES: ImportRow[] = [
   { symbol: "AAPL", assetType: "stock", type: "buy", quantity: 10, price: 150.25, fee: 1.99, occurredAt: "2025-06-01", currency: "USD", market: "US", note: "" },
-  { symbol: "BTC", name: "Bitcoin", assetType: "crypto", type: "buy", quantity: 0.5, price: 60000, fee: 0, occurredAt: "2025-07-15", currency: "USD", market: "US" },
+  { symbol: "BTC", name: "Bitcoin", assetType: "crypto", externalId: "1", type: "buy", quantity: 0.5, price: 60000, fee: 0, occurredAt: "2025-07-15", currency: "USD", market: "US" },
   { symbol: "XAUUSD=X", name: "Gold", assetType: "commodity", type: "buy", quantity: 1, price: 2400, fee: 0, occurredAt: "2025-08-01", currency: "USD", market: "US" },
   { symbol: "PTT.BK", assetType: "stock", type: "buy", quantity: 100, price: 40.5, fee: 5, occurredAt: "2025-08-20", currency: "THB", market: "SET" },
 ];

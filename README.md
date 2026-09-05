@@ -8,7 +8,7 @@ Stack: Next.js 16 · Tailwind CSS v4 · PostgreSQL + Drizzle · Auth.js v5 · Re
 
 ```bash
 npx --yes pnpm@10 install
-cp .env.example .env            # set DATABASE_URL + AUTH_SECRET
+cp .env.example .env            # set DATABASE_URL + AUTH_SECRET + COINMARKETCAP_API_KEY
 docker compose up -d db         # or point DATABASE_URL anywhere Postgres lives
 npx --yes pnpm@10 db:migrate    # create tables
 npx --yes pnpm@10 seed          # optional demo data
@@ -35,7 +35,7 @@ The environment name becomes the Compose project name, so containers and the DB 
 
 ## Deploy (Dokploy)
 
-Create a Compose service from this repo; set env `POSTGRES_PASSWORD` and `AUTH_SECRET` (`openssl rand -base64 32`). The app container runs migrations on boot and exposes `/api/health`.
+Create a Compose service from this repo; set env `POSTGRES_PASSWORD`, `AUTH_SECRET` (`openssl rand -base64 32`), and `COINMARKETCAP_API_KEY` (Startup or higher preserves five years of crypto history). The app container runs migrations on boot and exposes `/api/health`.
 
 ## Verify before committing
 

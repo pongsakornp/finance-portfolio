@@ -65,7 +65,7 @@ Mobile: sidebar collapses into a left Sheet; stat cards stack 2-up; data tables 
 - `pl.tsx` — `<PL>` signed colored amount, `<PLPct>` percent. **Every** gain/loss renders through these (the one deliberate custom component).
 - `charts/allocation-donut` — shadcn `Chart` donut by asset class (wraps Recharts).
 - `charts/performance-chart` — shadcn `Chart` area (portfolio % change) + dashed S&P 500 line, `ToggleGroup` range 1M/3M/6M/1Y, `Checkbox` benchmark toggle.
-- `features/add-transaction-dialog` — `Field`/`FieldGroup` form: portfolio select, action select (buy/sell/dividend), asset class, symbol (+CoinGecko ID for crypto), qty/price/fee/date. Dividend mode hides price/fee and relabels quantity as cash amount.
+- `features/add-transaction-dialog` — `Field`/`FieldGroup` form: portfolio select, action select (buy/sell/dividend), asset class, symbol (CoinMarketCap crypto autocomplete), qty/price/fee/date. Dividend mode hides price/fee and relabels quantity as cash amount.
 - `features/import-client` — CSV upload → parse preview (first 20 rows) → target portfolio → import; template download link. Rendered inside the Settings page's Import / Export card.
 - `features/delete-button`, `toggle-alert-button` — icon buttons wired to bound server actions with confirm + toast.
 - `currency-switcher` — global USD/THB display toggle (persists to user profile).

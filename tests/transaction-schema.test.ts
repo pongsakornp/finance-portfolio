@@ -61,6 +61,36 @@ describe("createTransactionSchema", () => {
     expect(res.success).toBe(true);
   });
 
+  it("requires a numeric CoinMarketCap ID for crypto assets", () => {
+    const missing = createTransactionSchema.safeParse({
+      ...base,
+      symbol: "BTC",
+      assetType: "crypto",
+      type: "buy",
+      price: 100,
+    });
+    const invalid = createTransactionSchema.safeParse({
+      ...base,
+      symbol: "BTC",
+      assetType: "crypto",
+      externalId: "bitcoin",
+      type: "buy",
+      price: 100,
+    });
+    const valid = createTransactionSchema.safeParse({
+      ...base,
+      symbol: "BTC",
+      assetType: "crypto",
+      externalId: "1",
+      type: "buy",
+      price: 100,
+    });
+
+    expect(missing.success).toBe(false);
+    expect(invalid.success).toBe(false);
+    expect(valid.success).toBe(true);
+  });
+
   it("rejects an unknown market value", () => {
     const res = createTransactionSchema.safeParse({
       ...base,
