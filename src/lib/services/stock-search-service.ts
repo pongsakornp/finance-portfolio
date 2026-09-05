@@ -29,9 +29,10 @@ export async function searchStocks(
 ): Promise<StockSearchOption[]> {
   const term = query.trim();
   if (!term) return [];
+  const yahooTerm = market === "SET" && !/\.BK$/i.test(term) ? `${term}.BK` : term;
 
   const res = await fetch(
-    `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(term)}&quotesCount=${Math.min(Math.max(limit * 3, 10), 50)}&newsCount=0`,
+    `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(yahooTerm)}&quotesCount=${Math.min(Math.max(limit * 3, 10), 50)}&newsCount=0`,
     { headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" }, cache: "no-store" }
   );
   if (!res.ok) throw new Error(`Yahoo search: HTTP ${res.status}`);
