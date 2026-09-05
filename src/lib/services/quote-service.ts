@@ -112,6 +112,8 @@ export function setYahooSymbol(symbol: string): string {
 type FinnomenaStock = {
   status?: boolean;
   data?: {
+    name?: string;
+    th_name?: string;
     price?: string | number;
     currency?: string;
     perf_1d?: string | number | null;
@@ -141,7 +143,12 @@ async function fetchFinnomenaStock(symbol: string): Promise<FetchResult> {
       : perfP1d != null && Number.isFinite(perfP1d) && perfP1d !== -100
         ? price / (1 + perfP1d / 100)
         : null;
-  return { price, previousClose, currency: json.data?.currency ?? "THB" };
+  return {
+    price,
+    previousClose,
+    currency: json.data?.currency ?? "THB",
+    name: json.data?.th_name || json.data?.name || null,
+  };
 }
 
 /**
@@ -236,17 +243,19 @@ export async function getQuote(asset: Asset): Promise<Quote> {
     }
 
     // Fill a name still stuck at its symbol (no name input for stock/ETF/crypto).
+    let resolvedName = asset.name;
     if (asset.name === asset.symbol && fresh.name) {
       // Yahoo appends the market suffix for crypto (e.g. "Bitcoin USD") — drop it.
-      const name =
+      resolvedName =
         asset.type === "crypto" && fresh.name.endsWith(" USD")
           ? fresh.name.slice(0, -4)
           : fresh.name;
-      await db.update(assets).set({ name }).where(eq(assets.id, asset.id));
+      await db.update(assets).set({ name: resolvedName }).where(eq(assets.id, asset.id));
     }
 
     return {
       ...base,
+      name: resolvedName,
       currency: fresh.currency,
       price: fresh.price,
       previousClose: fresh.previousClose,

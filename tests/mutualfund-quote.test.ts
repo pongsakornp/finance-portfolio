@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 // minimal db stub: getQuote only reads the price_cache row and upserts on miss
+const { updateSet, dbUpdate } = vi.hoisted(() => {
+  const updateSet = vi.fn(() => ({ where: () => Promise.resolve() }));
+  const dbUpdate = vi.fn(() => ({ set: updateSet }));
+  return { updateSet, dbUpdate };
+});
+
 vi.mock("@/lib/db", () => ({
   db: {
     select: () => ({
@@ -13,6 +19,7 @@ vi.mock("@/lib/db", () => ({
         onConflictDoNothing: () => Promise.resolve(),
       }),
     }),
+    update: dbUpdate,
   },
 }));
 
@@ -124,9 +131,38 @@ describe("SET market quotes (Finnomena share feed, Yahoo .BK fallback)", () => {
     } as never);
     expect(q.price).toBe(10.9);
     expect(q.previousClose).toBeCloseTo(11.2); // 10.9 - (-0.3)
+    expect(q.name).toBe("Asia Sermkij Leasing");
     const url = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(url).toContain("stock/quote/ASK");
     expect(url).not.toContain("ASK.BK");
+  });
+
+  it("updates asset name in db when stock name was stuck at symbol", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: true,
+          statusCode: 200,
+          data: { name: "PR9", price: "19.6", th_name: "Praram 9 Hospital Public Company Limited", currency: "THB", perf_1d: "0.3" },
+        }),
+      }))
+    );
+    const q = await getQuote({
+      id: "pr9-1",
+      symbol: "PR9",
+      name: "PR9",
+      type: "stock",
+      currency: "THB",
+      market: "SET",
+      externalId: null,
+      createdAt: new Date(),
+    } as never);
+    expect(q.name).toBe("Praram 9 Hospital Public Company Limited");
+    expect(dbUpdate).toHaveBeenCalled();
+    expect(updateSet).toHaveBeenCalledWith({ name: "Praram 9 Hospital Public Company Limited" });
   });
 
   it("falls back to Yahoo .BK when Finnomena has no quote", async () => {
