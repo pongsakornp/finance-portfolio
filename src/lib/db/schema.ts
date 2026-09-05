@@ -54,6 +54,10 @@ export const assets = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     symbol: text("symbol").notNull(), // AAPL, BTC, PTT.BK
     name: text("name").notNull(),
+    // Localized names are kept independently so a future instrument picker can
+    // search and display either language without losing the canonical name.
+    nameEn: text("name_en"),
+    nameTh: text("name_th"),
     type: assetTypeEnum("type").notNull(),
     currency: text("currency").notNull().default("USD"),
     market: marketEnum("market").notNull().default("US"), // US | SET (Stock Exchange of Thailand)

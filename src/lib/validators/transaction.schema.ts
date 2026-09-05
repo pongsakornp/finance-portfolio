@@ -16,7 +16,9 @@ export const upsertAssetSchema = z.object({
     .min(1)
     .max(20)
     .transform((s) => s.trim().toUpperCase()),
-  name: z.string().min(1).max(80),
+  name: z.string().min(1).max(160),
+  nameEn: z.string().min(1).max(160).optional(),
+  nameTh: z.string().min(1).max(160).optional(),
   type: z.enum(ASSET_TYPES),
   currency: z.string().length(3).default("USD"),
   market: z.enum(MARKETS).default("US"),
@@ -35,7 +37,9 @@ export const transactionObjectBaseSchema = z.object({
     .max(20)
     .transform((s) => s.trim().toUpperCase()),
   assetType: z.enum(ASSET_TYPES),
-  assetName: z.string().min(1).max(80).optional(),
+  assetName: z.string().min(1).max(160).optional(),
+  assetNameEn: z.string().min(1).max(160).optional(),
+  assetNameTh: z.string().min(1).max(160).optional(),
   externalId: z.string().max(60).optional(),
   market: z.enum(MARKETS).optional(),
   type: z.enum(["buy", "sell"]),
