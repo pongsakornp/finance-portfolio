@@ -26,6 +26,7 @@ export type CryptoQuote = {
   price: number;
   previousClose: number | null;
   currency: "USD";
+  name?: string | null;
 };
 
 export type CryptoHistoryPoint = { timestamp: string; price: number };

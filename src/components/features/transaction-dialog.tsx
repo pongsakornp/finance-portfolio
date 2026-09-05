@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { TxRow } from "@/lib/services/view-service";
 import { padDecimals } from "@/lib/utils/money";
 
@@ -194,32 +195,36 @@ export function TransactionDialog({
               </FieldContent>
             </Field>
 
-            <Field>
+            <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Asset class</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="assetType" value={assetType} />
-                <Select defaultValue={transaction?.asset.type ?? "stock"} onValueChange={(v) => v && setAssetType(v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {(v) =>
-                        ({
-                          stock: "Stock",
-                          etf: "ETF",
-                          crypto: "Crypto",
-                          commodity: "Commodity",
-                          mutualfund: "Fund",
-                        }[String(v)] ?? v)
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="stock">Stock</SelectItem>
-                    <SelectItem value="etf">ETF</SelectItem>
-                    <SelectItem value="crypto">Crypto</SelectItem>
-                    <SelectItem value="commodity">Commodity</SelectItem>
-                    <SelectItem value="mutualfund">Fund</SelectItem>
-                  </SelectContent>
-                </Select>
+                <ToggleGroup
+                  aria-label="Asset class"
+                  className="w-full"
+                  size="sm"
+                  spacing={0}
+                  value={[assetType]}
+                  variant="outline"
+                  onValueChange={(value) => {
+                    const next = value[0];
+                    if (
+                      next === "stock" ||
+                      next === "etf" ||
+                      next === "crypto" ||
+                      next === "commodity" ||
+                      next === "mutualfund"
+                    ) {
+                      setAssetType(next);
+                    }
+                  }}
+                >
+                  <ToggleGroupItem className="flex-1" value="stock">Stock</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="etf">ETF</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="crypto">Crypto</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="commodity">Commodity</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="mutualfund">Fund</ToggleGroupItem>
+                </ToggleGroup>
               </FieldContent>
             </Field>
 
