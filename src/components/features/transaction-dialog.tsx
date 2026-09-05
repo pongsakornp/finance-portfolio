@@ -283,7 +283,7 @@ export function TransactionDialog({
             <Field>
               <FieldLabel className="text-muted-foreground">Quantity</FieldLabel>
               <FieldContent>
-                <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity} />
+                <Input name="quantity" type="number" step="any" min="0" required defaultValue={transaction?.quantity ?? "0"} />
               </FieldContent>
             </Field>
 
