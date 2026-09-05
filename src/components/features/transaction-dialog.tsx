@@ -11,6 +11,7 @@ import {
 } from "@/actions/transaction.actions";
 import { searchCryptoAssetsAction, type CryptoOption } from "@/actions/crypto.actions";
 import { searchFundsAction } from "@/actions/fund.actions";
+import { searchStocksAction, type StockOption } from "@/actions/stock.actions";
 import { Button } from "@/components/ui/button";
 import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/features/date-picker";
@@ -43,6 +44,24 @@ import { padDecimals } from "@/lib/utils/money";
 
 type Portfolio = { id: string; name: string };
 type FundOption = { value: string; label: string };
+type AssetChoice = "US" | "SET" | "crypto" | "commodity" | "mutualfund";
+
+function assetChoiceFor(asset?: TxRow["asset"]): AssetChoice {
+  if (!asset || asset.type === "stock" || asset.type === "etf") {
+    return asset?.market === "SET" ? "SET" : "US";
+  }
+  return asset.type === "crypto" || asset.type === "commodity" || asset.type === "mutualfund"
+    ? asset.type
+    : "US";
+}
+
+function assetTypeFor(choice: AssetChoice) {
+  return choice === "US" || choice === "SET" ? "stock" : choice;
+}
+
+function marketFor(choice: AssetChoice): "US" | "SET" {
+  return choice === "SET" || choice === "mutualfund" ? "SET" : "US";
+}
 
 export function TransactionDialog({
   portfolios,
@@ -55,8 +74,9 @@ export function TransactionDialog({
 }) {
   const isEdit = !!transaction;
   const [open, setOpen] = useState(false);
-  const [assetType, setAssetType] = useState(transaction?.asset.type ?? "stock");
-  const [market, setMarket] = useState<"US" | "SET">(transaction?.asset.market ?? "US");
+  const [assetChoice, setAssetChoice] = useState<AssetChoice>(() => assetChoiceFor(transaction?.asset));
+  const assetType = assetTypeFor(assetChoice);
+  const market = marketFor(assetChoice);
   const [txType, setTxType] = useState<"buy" | "sell">(transaction?.type ?? "buy");
   const [portfolioId, setPortfolioId] = useState(
     transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0]?.id
@@ -67,27 +87,40 @@ export function TransactionDialog({
   const [cryptoQuery, setCryptoQuery] = useState("");
   const [cryptoRows, setCryptoRows] = useState<CryptoOption[]>([]);
   const [cryptoValue, setCryptoValue] = useState<CryptoOption | null>(null);
+  const [stockQuery, setStockQuery] = useState("");
+  const [stockRows, setStockRows] = useState<StockOption[]>([]);
+  const [stockValue, setStockValue] = useState<StockOption | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
   // fetch fund suggestions for the autocomplete (debounced)
   useEffect(() => {
-    if (assetType !== "mutualfund" || !open) return;
+    if (assetChoice !== "mutualfund" || !open) return;
     const t = setTimeout(() => {
       searchFundsAction(fundQuery).then(setFundRows).catch(() => setFundRows([]));
     }, 150);
     return () => clearTimeout(t);
-  }, [assetType, fundQuery, open]);
+  }, [assetChoice, fundQuery, open]);
 
   // CMC catalog suggestions are DB-backed; the service warms an empty catalog once.
   useEffect(() => {
-    if (assetType !== "crypto" || !open) return;
+    if (assetChoice !== "crypto" || !open) return;
     const t = setTimeout(() => {
       searchCryptoAssetsAction(cryptoQuery).then(setCryptoRows).catch(() => setCryptoRows([]));
     }, 150);
     return () => clearTimeout(t);
-  }, [assetType, cryptoQuery, open]);
+  }, [assetChoice, cryptoQuery, open]);
+
+  // Yahoo handles both US and SET (including ETFs); SET suggestions are saved
+  // without Yahoo's .BK suffix.
+  useEffect(() => {
+    if ((assetChoice !== "US" && assetChoice !== "SET") || !open) return;
+    const t = setTimeout(() => {
+      searchStocksAction(stockQuery, assetChoice).then(setStockRows).catch(() => setStockRows([]));
+    }, 150);
+    return () => clearTimeout(t);
+  }, [assetChoice, open, stockQuery]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -95,8 +128,7 @@ export function TransactionDialog({
       // reset to the transaction's (or add) values on every open
       setTxType(isEdit ? transaction.type : "buy");
       setPortfolioId(isEdit ? transaction.portfolioId : defaultPortfolioId ?? portfolios[0]?.id);
-      setAssetType(isEdit ? transaction.asset.type : "stock");
-      setMarket(isEdit ? transaction.asset.market : "US");
+      setAssetChoice(isEdit ? assetChoiceFor(transaction.asset) : "US");
       setFundQuery("");
       setFundValue(
         isEdit && transaction.asset.type === "mutualfund"
@@ -107,6 +139,13 @@ export function TransactionDialog({
       setCryptoValue(
         isEdit && transaction.asset.type === "crypto" && transaction.asset.externalId
           ? { value: transaction.asset.symbol, label: transaction.asset.name, cmcId: transaction.asset.externalId }
+          : null
+      );
+      const isRegionalAsset = isEdit && (transaction.asset.type === "stock" || transaction.asset.type === "etf");
+      setStockQuery(isRegionalAsset ? transaction.asset.symbol : "");
+      setStockValue(
+        isRegionalAsset
+          ? { value: transaction.asset.symbol.replace(/\.BK$/i, ""), label: transaction.asset.nameEn ?? transaction.asset.name }
           : null
       );
     }
@@ -196,31 +235,32 @@ export function TransactionDialog({
             </Field>
 
             <Field className="sm:col-span-2">
-              <FieldLabel className="text-muted-foreground">Asset class</FieldLabel>
+              <FieldLabel className="text-muted-foreground">Asset</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="assetType" value={assetType} />
+                <input type="hidden" name="market" value={market} />
                 <ToggleGroup
-                  aria-label="Asset class"
+                  aria-label="Asset"
                   className="w-full"
                   size="sm"
                   spacing={0}
-                  value={[assetType]}
+                  value={[assetChoice]}
                   variant="outline"
                   onValueChange={(value) => {
                     const next = value[0];
                     if (
-                      next === "stock" ||
-                      next === "etf" ||
+                      next === "US" ||
+                      next === "SET" ||
                       next === "crypto" ||
                       next === "commodity" ||
                       next === "mutualfund"
                     ) {
-                      setAssetType(next);
+                      setAssetChoice(next);
                     }
                   }}
                 >
-                  <ToggleGroupItem className="flex-1" value="stock">Stock</ToggleGroupItem>
-                  <ToggleGroupItem className="flex-1" value="etf">ETF</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="US">US</ToggleGroupItem>
+                  <ToggleGroupItem className="flex-1" value="SET">Thailand</ToggleGroupItem>
                   <ToggleGroupItem className="flex-1" value="crypto">Crypto</ToggleGroupItem>
                   <ToggleGroupItem className="flex-1" value="commodity">Commodity</ToggleGroupItem>
                   <ToggleGroupItem className="flex-1" value="mutualfund">Fund</ToggleGroupItem>
@@ -228,27 +268,7 @@ export function TransactionDialog({
               </FieldContent>
             </Field>
 
-            {assetType !== "crypto" && (
-              <Field>
-                <FieldLabel className="text-muted-foreground">Market</FieldLabel>
-                <FieldContent>
-                  <input type="hidden" name="market" value={market} />
-                  <Select value={market} onValueChange={(v) => v && setMarket(v as "US" | "SET")}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {(v) => ({ US: "US", SET: "SET (Thailand)" }[String(v)] ?? v)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="US">US</SelectItem>
-                      <SelectItem value="SET">SET (Thailand)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FieldContent>
-              </Field>
-            )}
-
-            <Field>
+            <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Symbol</FieldLabel>
               <FieldContent>
                 {assetType === "mutualfund" ? (
@@ -290,6 +310,7 @@ export function TransactionDialog({
                   >
                     <input type="hidden" name="symbol" value={cryptoValue?.value ?? ""} />
                     <input type="hidden" name="assetName" value={cryptoValue?.label ?? ""} />
+                    <input type="hidden" name="assetNameEn" value={cryptoValue?.label ?? ""} />
                     <input type="hidden" name="externalId" value={cryptoValue?.cmcId ?? ""} />
                     <ComboboxInput
                       placeholder="Search crypto symbol or name…"
@@ -307,16 +328,44 @@ export function TransactionDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                ) : assetChoice === "US" || assetChoice === "SET" ? (
+                  <Combobox
+                    items={stockRows}
+                    value={stockValue}
+                    onValueChange={(v) => setStockValue(v as StockOption | null)}
+                    onInputValueChange={(v) => {
+                      setStockQuery(v);
+                      if (stockValue && v.toUpperCase() !== stockValue.value) setStockValue(null);
+                    }}
+                    filter={null}
+                    itemToStringValue={(it) => (it as StockOption).value}
+                    itemToStringLabel={(it) => (it as StockOption).value}
+                  >
+                    <input type="hidden" name="symbol" value={stockValue?.value ?? stockQuery} />
+                    <input type="hidden" name="assetName" value={stockValue?.label ?? ""} />
+                    <input type="hidden" name="assetNameEn" value={stockValue?.label ?? ""} />
+                    <ComboboxInput
+                      placeholder={assetChoice === "SET" ? "Search SET symbol or English name…" : "Search US symbol or name…"}
+                      showClear
+                      className="w-full uppercase"
+                    />
+                    <ComboboxContent className="w-[min(30rem,var(--available-width))] min-w-[min(30rem,var(--available-width))]">
+                      <ComboboxList>
+                        {stockRows.map((stock) => (
+                          <ComboboxItem key={stock.value} value={stock} className="flex-col items-start">
+                            <span className="w-full whitespace-nowrap font-medium uppercase">{stock.value}</span>
+                            <span className="w-full truncate text-muted-foreground">{stock.label}</span>
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
                 ) : (
                   <Input
                     name="symbol"
                     required
                     defaultValue={transaction?.asset.symbol}
-                    placeholder={
-                      assetType === "commodity"
-                          ? "XAUUSD=X (gold), CL=F (oil)"
-                          : "AAPL / PTT.BK / TDEX.BK"
-                    }
+                    placeholder="XAUUSD=X (gold), CL=F (oil)"
                     className="uppercase"
                   />
                 )}

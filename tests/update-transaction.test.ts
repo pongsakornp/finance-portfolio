@@ -33,6 +33,14 @@ function selectResolves(rows: unknown[]) {
 }
 
 describe("upsertAsset", () => {
+  it("reuses a legacy SET asset stored with Yahoo's .BK suffix", async () => {
+    selectResolves([{ id: "asset-ptt" }]);
+
+    await expect(
+      upsertAsset({ symbol: "PTT", name: "PTT Public Company Limited", type: "stock", market: "SET" })
+    ).resolves.toBe("asset-ptt");
+  });
+
   it("returns the existing asset and does not re-denominate it (shared across users)", async () => {
     selectResolves([{ id: "asset-1", currency: "THB" }]);
     vi.mocked(db.update).mockClear();

@@ -78,6 +78,13 @@
       "when": 1788627101299,
       "tag": "0010_bored_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788628647063,
+      "tag": "0011_red_mongu",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
@@ -15,6 +15,8 @@ export type ImportRow = {
   symbol: string;
   name?: string;
   assetName?: string;
+  assetNameEn?: string;
+  assetNameTh?: string;
   assetType: (typeof ASSET_TYPES)[number];
   type: "buy" | "sell";
   quantity: number;
@@ -36,24 +38,30 @@ export type ImportRow = {
  * attributes.
  */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
+  const symbol = input.market === "SET" ? input.symbol.replace(/\.BK$/i, "") : input.symbol;
+  // Old imports and manual entries may have stored the Yahoo `.BK` suffix.
+  // Treat it as the same shared SET asset while saving new rows in bare form.
+  const symbolVariants = input.market === "SET" ? [symbol, `${symbol}.BK`] : [symbol];
   const [existing] = await db
     .select({ id: assets.id })
     .from(assets)
-    .where(and(eq(assets.symbol, input.symbol), eq(assets.type, input.type)))
+    .where(and(inArray(assets.symbol, symbolVariants), eq(assets.type, input.type)))
     .limit(1);
   if (existing) return existing.id;
 
-  const fallback = input.name || input.symbol;
+  const fallback = input.name || symbol;
   const name =
-    fallback === input.symbol && input.type === "mutualfund"
-      ? (await getFundName(input.symbol)) ?? fallback
+    fallback === symbol && input.type === "mutualfund"
+      ? (await getFundName(symbol)) ?? fallback
       : fallback;
 
   const [created] = await db
     .insert(assets)
     .values({
-      symbol: input.symbol,
+      symbol,
       name,
+      nameEn: input.nameEn ?? null,
+      nameTh: input.nameTh ?? null,
       type: input.type,
       currency: input.currency?.toUpperCase() ?? "USD",
       market: input.market ?? "US",
@@ -71,6 +79,8 @@ export async function createTransaction(
   const assetId = await upsertAsset({
     symbol: data.symbol,
     name: data.assetName ?? "",
+    nameEn: data.assetNameEn,
+    nameTh: data.assetNameTh,
     type: data.assetType,
     currency:
       data.assetType === "crypto"
@@ -135,6 +145,8 @@ export async function updateTransaction(
   const assetId = await upsertAsset({
     symbol: data.symbol,
     name: data.assetName ?? "",
+    nameEn: data.assetNameEn,
+    nameTh: data.assetNameTh,
     type: data.assetType,
     currency:
       data.assetType === "crypto"
@@ -179,6 +191,8 @@ export async function importTransactions(
       portfolioId,
       occurredAt: new Date(row.occurredAt),
       assetName: row.assetName ?? row.name,
+      assetNameEn: row.assetNameEn,
+      assetNameTh: row.assetNameTh,
     });
     if (!parsed.success) {
       errors.push(`Row ${i + 2}: ${parsed.error.issues.map((e) => e.message).join("; ")}`);
@@ -188,6 +202,8 @@ export async function importTransactions(
     const assetId = await upsertAsset({
       symbol: d.symbol,
       name: d.assetName ?? "",
+      nameEn: d.assetNameEn,
+      nameTh: d.assetNameTh,
       type: d.assetType,
       currency:
         row.currency?.toUpperCase() ??

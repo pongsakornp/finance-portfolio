@@ -17,7 +17,14 @@ export type Quote = {
   previousClose: number | null;
 };
 
-type FetchResult = { price: number; previousClose: number | null; currency: string; name?: string | null };
+type FetchResult = {
+  price: number;
+  previousClose: number | null;
+  currency: string;
+  name?: string | null;
+  nameEn?: string | null;
+  nameTh?: string | null;
+};
 
 type YahooChart = {
   chart: {
@@ -44,11 +51,13 @@ async function fetchYahoo(symbol: string): Promise<FetchResult> {
   const json = (await res.json()) as YahooChart;
   const meta = json.chart.result?.[0]?.meta;
   if (!meta?.regularMarketPrice) throw new Error(`Yahoo ${symbol}: no price`);
+  const name = meta.longName ?? meta.shortName ?? null;
   return {
     price: meta.regularMarketPrice,
     previousClose: meta.previousClose ?? meta.chartPreviousClose ?? null,
     currency: meta.currency === "GBp" ? "GBX" : (meta.currency ?? "USD"),
-    name: meta.longName ?? meta.shortName ?? null,
+    name,
+    nameEn: name,
   };
 }
 
@@ -128,6 +137,8 @@ async function fetchFinnomenaStock(symbol: string): Promise<FetchResult> {
     previousClose,
     currency: json.data?.currency ?? "THB",
     name: json.data?.th_name || json.data?.name || null,
+    nameEn: json.data?.name ?? null,
+    nameTh: json.data?.th_name ?? null,
   };
 }
 
@@ -224,7 +235,8 @@ export async function getQuote(asset: Asset): Promise<Quote> {
         .onConflictDoNothing();
     }
 
-    // Fill a name still stuck at its symbol (no name input for stock/ETF/crypto).
+    // Fill a name still stuck at its symbol (no name input for stock/ETF/crypto)
+    // and preserve both localized names when a provider supplies them.
     let resolvedName = asset.name;
     if (asset.name === asset.symbol && fresh.name) {
       // Yahoo appends the market suffix for crypto (e.g. "Bitcoin USD") — drop it.
@@ -232,7 +244,14 @@ export async function getQuote(asset: Asset): Promise<Quote> {
         asset.type === "crypto" && fresh.name.endsWith(" USD")
           ? fresh.name.slice(0, -4)
           : fresh.name;
-      await db.update(assets).set({ name: resolvedName }).where(eq(assets.id, asset.id));
+    }
+    const nameEn = asset.nameEn ?? fresh.nameEn ?? null;
+    const nameTh = asset.nameTh ?? fresh.nameTh ?? null;
+    if (resolvedName !== asset.name || nameEn !== asset.nameEn || nameTh !== asset.nameTh) {
+      await db
+        .update(assets)
+        .set({ name: resolvedName, nameEn, nameTh })
+        .where(eq(assets.id, asset.id));
     }
 
     return {

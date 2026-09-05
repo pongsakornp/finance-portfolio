@@ -162,7 +162,11 @@ describe("SET market quotes (Finnomena share feed, Yahoo .BK fallback)", () => {
     } as never);
     expect(q.name).toBe("Praram 9 Hospital Public Company Limited");
     expect(dbUpdate).toHaveBeenCalled();
-    expect(updateSet).toHaveBeenCalledWith({ name: "Praram 9 Hospital Public Company Limited" });
+    expect(updateSet).toHaveBeenCalledWith({
+      name: "Praram 9 Hospital Public Company Limited",
+      nameEn: "PR9",
+      nameTh: "Praram 9 Hospital Public Company Limited",
+    });
   });
 
   it("falls back to Yahoo .BK when Finnomena has no quote", async () => {
