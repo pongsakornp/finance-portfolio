@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { signIn } from "@/lib/auth";
+import { signIn, signOut } from "@/lib/auth";
 import { AuthError } from "next-auth";
 
 const registerSchema = z.object({
@@ -80,3 +80,8 @@ export async function loginAction(
   }
   return {};
 }
+
+export async function signOutAction(): Promise<void> {
+  await signOut({ redirectTo: "/login" });
+}
+
