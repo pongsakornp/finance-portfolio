@@ -4,13 +4,18 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { alerts, assets, portfolios, users } from "@/lib/db/schema";
+import { alerts, assets, users } from "@/lib/db/schema";
 import { convert } from "@/lib/services/fx-service";
 import { buildHoldingsView, getUserTransactions, getUserPortfolios } from "@/lib/services/view-service";
 import { monthlyBreakdown } from "@/lib/services/report-service";
 import { benchmarkSeries, portfolioSeries } from "@/lib/services/valuation-service";
 import { getQuote } from "@/lib/services/quote-service";
-import { assertOwnedPortfolio } from "@/lib/services/portfolio-service";
+import {
+  assertOwnedPortfolio,
+  createPortfolio,
+  deletePortfolio,
+  renamePortfolio,
+} from "@/lib/services/portfolio-service";
 import {
   createTransaction,
   deleteTransaction,
@@ -40,6 +45,7 @@ function revalidateMutated() {
   revalidatePath("/dashboard");
   revalidatePath("/transactions");
   revalidatePath("/portfolios");
+  revalidatePath("/settings");
 }
 
 // z.coerce.date() can't serialize to JSON Schema (breaks tools/list) — ISO strings over the wire
@@ -357,10 +363,7 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ name }) => {
       try {
-        const [created] = await db
-          .insert(portfolios)
-          .values({ userId, name })
-          .returning({ id: portfolios.id, name: portfolios.name });
+        const created = await createPortfolio(userId, name.trim());
         revalidatePath("/portfolios");
         revalidatePath("/dashboard");
         return okJson(created);
@@ -379,8 +382,7 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ portfolioId }) => {
       try {
-        await assertOwnedPortfolio(portfolioId, userId);
-        await db.delete(portfolios).where(eq(portfolios.id, portfolioId));
+        await deletePortfolio(portfolioId, userId);
         revalidateMutated();
         return okJson({ deleted: portfolioId });
       } catch (e) {
@@ -397,12 +399,7 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ portfolioId, name }) => {
       try {
-        await assertOwnedPortfolio(portfolioId, userId);
-        const [updated] = await db
-          .update(portfolios)
-          .set({ name })
-          .where(eq(portfolios.id, portfolioId))
-          .returning({ id: portfolios.id, name: portfolios.name });
+        const updated = await renamePortfolio(portfolioId, userId, name.trim());
         revalidateMutated();
         return okJson(updated);
       } catch (e) {

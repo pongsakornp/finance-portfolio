@@ -1,16 +1,27 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { db } from "@/lib/db";
-import { portfolios } from "@/lib/db/schema";
 import { requireUserId } from "@/lib/session";
 import {
   createPortfolioSchema,
   deletePortfolioSchema,
+  reorderPortfoliosSchema,
   renamePortfolioSchema,
 } from "@/lib/validators/portfolio.schema";
+import {
+  createPortfolio,
+  deletePortfolio,
+  renamePortfolio,
+  reorderPortfolios,
+} from "@/lib/services/portfolio-service";
+
+function revalidatePortfolioViews() {
+  revalidatePath("/portfolios");
+  revalidatePath("/dashboard");
+  revalidatePath("/transactions");
+  revalidatePath("/settings");
+}
 
 export async function createPortfolioAction(formData: FormData) {
   const userId = await requireUserId();
@@ -22,9 +33,8 @@ export async function createPortfolioAction(formData: FormData) {
   }
 
   try {
-    await db.insert(portfolios).values({ userId, name: parsed.data.name });
-    revalidatePath("/portfolios");
-    revalidatePath("/dashboard");
+    await createPortfolio(userId, parsed.data.name);
+    revalidatePortfolioViews();
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to create portfolio" };
@@ -39,15 +49,8 @@ export async function deletePortfolioAction(id: string) {
   }
 
   try {
-    const [deleted] = await db
-      .delete(portfolios)
-      .where(and(eq(portfolios.id, parsed.data.id), eq(portfolios.userId, userId)))
-      .returning({ id: portfolios.id });
-    if (!deleted) return { error: "Portfolio not found" };
-
-    revalidatePath("/portfolios");
-    revalidatePath("/dashboard");
-    revalidatePath("/transactions");
+    await deletePortfolio(parsed.data.id, userId);
+    revalidatePortfolioViews();
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to delete portfolio" };
@@ -65,17 +68,26 @@ export async function renamePortfolioAction(id: string, formData: FormData) {
   }
 
   try {
-    const [updated] = await db
-      .update(portfolios)
-      .set({ name: parsed.data.name })
-      .where(and(eq(portfolios.id, parsed.data.id), eq(portfolios.userId, userId)))
-      .returning({ id: portfolios.id });
-    if (!updated) return { error: "Portfolio not found" };
-
-    revalidatePath("/portfolios");
-    revalidatePath("/dashboard");
+    await renamePortfolio(parsed.data.id, userId, parsed.data.name);
+    revalidatePortfolioViews();
     return { ok: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to rename portfolio" };
+  }
+}
+
+export async function reorderPortfoliosAction(orderedIds: string[]) {
+  const userId = await requireUserId();
+  const parsed = reorderPortfoliosSchema.safeParse({ orderedIds });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid portfolio order" };
+  }
+
+  try {
+    await reorderPortfolios(userId, parsed.data.orderedIds);
+    revalidatePortfolioViews();
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to reorder portfolios" };
   }
 }

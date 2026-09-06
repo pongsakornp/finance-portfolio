@@ -27,7 +27,6 @@ import {
 import {
   Field,
   FieldContent,
-  FieldDescription,
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -220,7 +219,7 @@ export function TransactionDialog({
               </FieldContent>
             </Field>
 
-            <Field>
+            <Field className="sm:col-span-2">
               <FieldLabel className="text-muted-foreground">Type</FieldLabel>
               <FieldContent>
                 <input type="hidden" name="type" value={txType} />
@@ -377,11 +376,6 @@ export function TransactionDialog({
                   />
                 )}
               </FieldContent>
-              {assetType === "crypto" && (
-                <FieldDescription>
-                  Select an asset to save its verified CoinMarketCap ID automatically.
-                </FieldDescription>
-              )}
             </Field>
 
             <Field>
