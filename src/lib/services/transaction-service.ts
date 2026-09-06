@@ -30,12 +30,12 @@ export type ImportRow = {
 };
 
 /**
- * find-or-create by (symbol, type) — asset rows are shared across users.
- * currency/market/externalId are set once at creation and NEVER mutated by a
- * later write: assets are shared, so re-denominating one from a single user's
- * transaction would silently change every other user's valuation. ponytail: a
- * wrong first value can't be corrected from the dialog — create with the right
- * attributes.
+ * find-or-create by (symbol, type, market) — asset rows are shared across users.
+ * Currency, market, and external IDs are set at creation and are not otherwise
+ * mutated by later writes: assets are shared, so re-denominating one from a
+ * single user's transaction would silently change every other user's
+ * valuation. The sole exception is the fixed SET market invariant: every SET
+ * security is THB-denominated, so an old USD value is safely normalized.
  */
 export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   const symbol = input.market === "SET" ? input.symbol.replace(/\.BK$/i, "") : input.symbol;
@@ -43,11 +43,25 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
   // Treat it as the same shared SET asset while saving new rows in bare form.
   const symbolVariants = input.market === "SET" ? [symbol, `${symbol}.BK`] : [symbol];
   const [existing] = await db
-    .select({ id: assets.id })
+    .select({ id: assets.id, currency: assets.currency, market: assets.market })
     .from(assets)
-    .where(and(inArray(assets.symbol, symbolVariants), eq(assets.type, input.type)))
+    .where(and(
+      inArray(assets.symbol, symbolVariants),
+      eq(assets.type, input.type),
+      eq(assets.market, input.market ?? "US")
+    ))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    // SET securities are always Baht-denominated. Repair assets created by
+    // callers that predate (or omit) the SET currency invariant.
+    if (existing.market === "SET" && existing.currency !== "THB") {
+      await db
+        .update(assets)
+        .set({ currency: "THB" })
+        .where(eq(assets.id, existing.id));
+    }
+    return existing.id;
+  }
 
   const fallback = input.name || symbol;
   const name =
@@ -63,7 +77,7 @@ export async function upsertAsset(input: UpsertAssetInput): Promise<string> {
       nameEn: input.nameEn ?? null,
       nameTh: input.nameTh ?? null,
       type: input.type,
-      currency: input.currency?.toUpperCase() ?? "USD",
+      currency: input.currency?.toUpperCase() ?? (input.market === "SET" ? "THB" : "USD"),
       market: input.market ?? "US",
       externalId: input.externalId ?? null,
     })

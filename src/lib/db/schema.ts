@@ -91,7 +91,9 @@ export const assets = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("assets_symbol_type_uq").on(t.symbol, t.type)]
+  // A ticker is only unique within its market: the same symbol can be listed
+  // in the US and on SET, with different native currencies and quotes.
+  (t) => [uniqueIndex("assets_symbol_type_market_uq").on(t.symbol, t.type, t.market)]
 );
 
 export const transactions = pgTable(
