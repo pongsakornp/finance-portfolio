@@ -1,4 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/lib/db";
 import { assets, portfolios, transactions } from "@/lib/db/schema";
@@ -37,13 +38,13 @@ export async function getUserTransactions(
   return rows.map((r) => ({ ...r.tx, asset: r.asset }));
 }
 
-export async function getUserPortfolios(userId: string) {
+export const getUserPortfolios = cache(async (userId: string) => {
   return db
     .select()
     .from(portfolios)
     .where(eq(portfolios.userId, userId))
     .orderBy(asc(portfolios.sortOrder), asc(portfolios.createdAt), asc(portfolios.id));
-}
+});
 
 export type HoldingRow = {
   asset: Asset;

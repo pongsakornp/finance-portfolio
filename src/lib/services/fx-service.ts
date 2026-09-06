@@ -7,6 +7,12 @@ import { d, num } from "@/lib/utils/money";
 import { dayKey } from "@/lib/utils/date";
 
 const FX_TTL_MS = 12 * 60 * 60 * 1000; // 12h — daily rates are plenty
+const FX_FETCH_TIMEOUT_MS = 3_000;
+const rateRefreshes = new Map<string, Promise<Decimal>>();
+
+export function isRateFresh(fetchedAt: Date, now = Date.now()): boolean {
+  return now - fetchedAt.getTime() < FX_TTL_MS;
+}
 
 export async function getRate(from: string, to: string): Promise<Decimal> {
   if (from === to) return new Decimal(1);
@@ -18,15 +24,33 @@ export async function getRate(from: string, to: string): Promise<Decimal> {
     .where(eq(fxRates.pair, pair))
     .limit(1);
 
-  if (cached && Date.now() - cached.fetchedAt.getTime() < FX_TTL_MS) {
+  if (cached) {
+    if (!isRateFresh(cached.fetchedAt)) {
+      void refreshRate(from, to).catch(() => undefined);
+    }
     return d(cached.rate);
   }
 
+  return refreshRate(from, to);
+}
+
+async function refreshRate(from: string, to: string): Promise<Decimal> {
+  const pair = `${from}/${to}`;
+  const pending = rateRefreshes.get(pair);
+  if (pending) return pending;
+
+  const refresh = fetchAndStoreRate(from, to).finally(() => rateRefreshes.delete(pair));
+  rateRefreshes.set(pair, refresh);
+  return refresh;
+}
+
+async function fetchAndStoreRate(from: string, to: string): Promise<Decimal> {
+  const pair = `${from}/${to}`;
   const res = await fetch(`https://open.er-api.com/v6/latest/${from}`, {
     next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(FX_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
-    if (cached) return d(cached.rate); // stale is better than nothing
     throw new Error(`FX fetch failed for ${pair}`);
   }
   const json = (await res.json()) as { rates?: Record<string, number> };
@@ -67,17 +91,18 @@ export async function loadFxHistory(
   fromDay: string
 ): Promise<Map<string, Map<string, number>>> {
   const out: Map<string, Map<string, number>> = new Map();
-  for (const cur of currencies) {
-    if (cur === "USD") continue;
-    const pair = `${cur}/USD`;
-    const rows = await db
-      .select()
-      .from(fxHistory)
-      .where(and(eq(fxHistory.pair, pair), gte(fxHistory.day, fromDay)));
-    const m = new Map<string, number>();
-    for (const r of rows) m.set(dayKey(new Date(r.day)), parseFloat(r.rate));
-    if (m.size) out.set(cur, m);
-  }
+  await Promise.all(
+    currencies.filter((cur) => cur !== "USD").map(async (cur) => {
+      const pair = `${cur}/USD`;
+      const rows = await db
+        .select()
+        .from(fxHistory)
+        .where(and(eq(fxHistory.pair, pair), gte(fxHistory.day, fromDay)));
+      const m = new Map<string, number>();
+      for (const r of rows) m.set(dayKey(new Date(r.day)), parseFloat(r.rate));
+      if (m.size) out.set(cur, m);
+    })
+  );
   return out;
 }
 

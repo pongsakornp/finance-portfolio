@@ -1,4 +1,5 @@
 const CMC_API_URL = "https://pro-api.coinmarketcap.com";
+const CMC_FETCH_TIMEOUT_MS = 3_000;
 
 type CmcUsdQuote = {
   symbol?: string;
@@ -47,6 +48,7 @@ async function cmcFetch(path: string, params: URLSearchParams): Promise<Response
       "X-CMC_PRO_API_KEY": apiKey(),
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(CMC_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`CoinMarketCap ${path}: HTTP ${res.status}`);
   return res;

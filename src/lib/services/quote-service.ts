@@ -6,6 +6,9 @@ import { fetchCoinMarketCapQuote } from "@/lib/services/coinmarketcap-service";
 import { upsertAsset } from "@/lib/services/transaction-service";
 import { dayKey } from "@/lib/utils/date";
 
+const QUOTE_FETCH_TIMEOUT_MS = 3_000;
+const quoteRefreshes = new Map<string, Promise<Quote>>();
+
 export type Asset = typeof assets.$inferSelect;
 
 export type Quote = {
@@ -53,7 +56,11 @@ type YahooChart = {
 async function fetchYahoo(symbol: string): Promise<FetchResult> {
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`,
-    { headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" }, cache: "no-store" }
+    {
+      headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(QUOTE_FETCH_TIMEOUT_MS),
+    }
   );
   if (!res.ok) throw new Error(`Yahoo ${symbol}: HTTP ${res.status}`);
   const json = (await res.json()) as YahooChart;
@@ -85,7 +92,7 @@ async function fetchFinnomena(symbol: string): Promise<FetchResult> {
   const from = to - 14 * 86400;
   const res = await fetch(
     `https://www.finnomena.com/fn3/api/fund/v2/public/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1D&from=${from}&to=${to}`,
-    { cache: "no-store" }
+    { cache: "no-store", signal: AbortSignal.timeout(QUOTE_FETCH_TIMEOUT_MS) }
   );
   if (!res.ok) throw new Error(`Finnomena ${symbol}: HTTP ${res.status}`);
   const json = (await res.json()) as FinnomenaHistory;
@@ -126,7 +133,11 @@ type FinnomenaStock = {
 async function fetchFinnomenaStock(symbol: string): Promise<FetchResult> {
   const res = await fetch(
     `https://www.finnomena.com/market-info/api/public/stock/quote/${encodeURIComponent(symbol)}`,
-    { headers: { Accept: "application/json" }, cache: "no-store" }
+    {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(QUOTE_FETCH_TIMEOUT_MS),
+    }
   );
   if (!res.ok) throw new Error(`Finnomena ${symbol}: HTTP ${res.status}`);
   const json = (await res.json()) as FinnomenaStock;
@@ -174,25 +185,35 @@ function ttlFor(type: Asset["type"]): number {
   return 5 * 60_000;
 }
 
-/** Quote with DB-backed TTL cache. All pages go through this — never call providers directly. */
-export async function getQuote(asset: Asset): Promise<Quote> {
+export function isQuoteFresh(
+  type: Asset["type"],
+  fetchedAt: Date,
+  now = Date.now()
+): boolean {
+  return now - fetchedAt.getTime() < ttlFor(type);
+}
+
+function quoteFromCache(asset: Asset, cached: typeof priceCache.$inferSelect): Quote {
   const base = { assetId: asset.id, symbol: asset.symbol, name: asset.name, type: asset.type };
+  return {
+    ...base,
+    currency: cached.currency,
+    price: parseFloat(cached.price),
+    previousClose: cached.previousClose ? parseFloat(cached.previousClose) : null,
+  };
+}
 
-  const [cached] = await db
-    .select()
-    .from(priceCache)
-    .where(inArray(priceCache.assetId, [asset.id]))
-    .limit(1);
+async function refreshQuote(asset: Asset): Promise<Quote> {
+  const pending = quoteRefreshes.get(asset.id);
+  if (pending) return pending;
 
-  if (cached && Date.now() - cached.fetchedAt.getTime() < ttlFor(asset.type)) {
-    return {
-      ...base,
-      currency: cached.currency,
-      price: parseFloat(cached.price),
-      previousClose: cached.previousClose ? parseFloat(cached.previousClose) : null,
-    };
-  }
+  const refresh = fetchAndStoreQuote(asset).finally(() => quoteRefreshes.delete(asset.id));
+  quoteRefreshes.set(asset.id, refresh);
+  return refresh;
+}
 
+async function fetchAndStoreQuote(asset: Asset): Promise<Quote> {
+  const base = { assetId: asset.id, symbol: asset.symbol, name: asset.name, type: asset.type };
   try {
     const fresh =
       asset.type === "crypto"
@@ -270,17 +291,30 @@ export async function getQuote(asset: Asset): Promise<Quote> {
       previousClose: fresh.previousClose,
     };
   } catch {
-    if (cached) {
-      // stale fallback beats a hard failure on flaky free APIs
-      return {
-        ...base,
-        currency: cached.currency,
-        price: parseFloat(cached.price),
-        previousClose: cached.previousClose ? parseFloat(cached.previousClose) : null,
-      };
-    }
     throw new Error(`No quote available for ${asset.symbol}`);
   }
+}
+
+/**
+ * Quote with a DB-backed TTL cache. Expired values render immediately while a
+ * deduplicated refresh runs in the background, keeping page navigation off the
+ * critical path for slow market-data providers.
+ */
+export async function getQuote(asset: Asset): Promise<Quote> {
+  const [cached] = await db
+    .select()
+    .from(priceCache)
+    .where(inArray(priceCache.assetId, [asset.id]))
+    .limit(1);
+
+  if (cached) {
+    if (!isQuoteFresh(asset.type, cached.fetchedAt)) {
+      void refreshQuote(asset).catch(() => undefined);
+    }
+    return quoteFromCache(asset, cached);
+  }
+
+  return refreshQuote(asset);
 }
 
 /** Resolve an asset symbol through the shared asset registry before quoting it. */

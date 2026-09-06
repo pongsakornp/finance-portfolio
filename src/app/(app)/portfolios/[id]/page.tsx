@@ -4,12 +4,11 @@ import { DownloadIcon } from "lucide-react";
 
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
-import { TransactionDialog } from "@/components/features/transaction-dialog";
+import { TransactionLedger } from "@/components/features/transaction-ledger";
 import { RenamePortfolioDialog } from "@/components/features/rename-portfolio-dialog";
 import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,15 +17,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { deleteTransactionAction } from "@/actions/transaction.actions";
 import { deletePortfolioAction } from "@/actions/portfolio.actions";
 import { db } from "@/lib/db";
 import { portfolios, users } from "@/lib/db/schema";
@@ -37,7 +27,7 @@ import {
 } from "@/lib/services/view-service";
 import { baseRate } from "@/lib/services/fx-service";
 import { requireUserId } from "@/lib/session";
-import { fmtDate, fmtMonthYear } from "@/lib/utils/date";
+import { fmtMonthYear } from "@/lib/utils/date";
 import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
 import { fmtMoney, fmtQty } from "@/lib/utils/money";
 
@@ -70,9 +60,8 @@ export default async function PortfolioDetailPage({
   const baseCurrency = user?.baseCurrency ?? "USD";
   const plView = user?.plView ?? "unrealized";
 
-  const view = await buildHoldingsView(txs);
+  const [view, rate] = await Promise.all([buildHoldingsView(txs), baseRate(baseCurrency)]);
   const t = view.totalsUsd;
-  const rate = await baseRate(baseCurrency);
   const holdings = [...view.rows].filter((r) => r.position.qty > 0);
   const ledger = [...txs].reverse();
 
@@ -177,98 +166,12 @@ export default async function PortfolioDetailPage({
               <EmptyDescription>Nothing here yet.</EmptyDescription>
             </Empty>
           ) : (
-            <>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Symbol</TableHead>
-                      <TableHead className="text-right">Qty / Amount</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ledger.map((tx) => (
-                      <TableRow key={tx.id}>
-                        <TableCell>{fmtDate(tx.occurredAt)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              tx.type === "buy" ? "default" : tx.type === "sell" ? "warning" : "secondary"
-                            }
-                            className="capitalize"
-                          >
-                            {tx.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {tx.asset.name !== tx.asset.symbol && (
-                            <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
-                          )}
-                          {tx.asset.name}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtQty(parseFloat(tx.quantity))}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <TransactionDialog portfolios={portfoliosList} transaction={tx} />
-                            <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="flex flex-col gap-2 md:hidden">
-                {ledger.map((tx) => (
-                  <Card key={tx.id}>
-                    <CardContent className="flex flex-col gap-1.5 p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
-                        <Badge
-                          variant={
-                            tx.type === "buy" ? "default" : "warning"
-                          }
-                          className="capitalize"
-                        >
-                          {tx.type}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <span className="font-medium">
-                            {tx.asset.name !== tx.asset.symbol && (
-                              <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
-                            )}
-                            {tx.asset.name}
-                          </span>
-                          <span className="text-sm text-muted-foreground"> · </span>
-                          <span className="tabular-nums">
-                            {fmtQty(parseFloat(tx.quantity))}
-                          </span>
-                          <span className="tabular-nums text-muted-foreground">
-                            {" "}
-                            @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-end gap-1">
-                          <TransactionDialog portfolios={portfoliosList} transaction={tx} />
-                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </>
+            <TransactionLedger
+              transactions={ledger}
+              portfolios={portfoliosList}
+              showPortfolio={false}
+              showFee={false}
+            />
           )}
         </CardContent>
       </Card>

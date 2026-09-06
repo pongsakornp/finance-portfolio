@@ -37,20 +37,24 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const userId = await requireUserId();
-  const [user] = await db
-    .select({ baseCurrency: users.baseCurrency, plView: users.plView })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  const [userRows, txs] = await Promise.all([
+    db
+      .select({ baseCurrency: users.baseCurrency, plView: users.plView })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    getUserTransactions(userId),
+  ]);
+  const user = userRows[0];
   const baseCurrency = user?.baseCurrency ?? "USD";
   const plView = user?.plView ?? "unrealized";
 
-  const txs = await getUserTransactions(userId);
-  const view = await buildHoldingsView(txs);
+  const [view, rate, reportTxs] = await Promise.all([
+    buildHoldingsView(txs),
+    baseRate(baseCurrency),
+    toUsdReportTxs(txs),
+  ]);
   const t = view.totalsUsd;
-
-  // single FX lookup for display conversion
-  const rate = await baseRate(baseCurrency);
 
   const byType = new Map<string, number>();
   for (const row of view.rows) {
@@ -83,7 +87,7 @@ export default async function DashboardPage() {
   );
 
   // monthly cash-flow in USD, then displayed in base currency
-  const monthly = monthlyBreakdown(await toUsdReportTxs(txs)).reverse();
+  const monthly = monthlyBreakdown(reportTxs).reverse();
   const contribution = monthly.map((r) => ({
     month: r.month,
     value: Math.round((r.invested - r.soldProceeds) * rate * 100) / 100,
