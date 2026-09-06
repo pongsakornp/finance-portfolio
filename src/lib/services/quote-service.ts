@@ -326,7 +326,11 @@ export async function getQuoteForRequest(request: QuoteRequest): Promise<{ quote
   let [asset] = await db
     .select()
     .from(assets)
-    .where(and(eq(assets.symbol, symbol), eq(assets.type, request.assetType)))
+    .where(and(
+      eq(assets.symbol, symbol),
+      eq(assets.type, request.assetType),
+      eq(assets.market, request.assetMarket)
+    ))
     .limit(1);
   const assetCreated = !asset;
   if (!asset) {

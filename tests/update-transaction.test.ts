@@ -42,7 +42,7 @@ describe("upsertAsset", () => {
   });
 
   it("returns the existing asset and does not re-denominate it (shared across users)", async () => {
-    selectResolves([{ id: "asset-1", currency: "THB" }]);
+    selectResolves([{ id: "asset-1", currency: "THB", market: "US" }]);
     vi.mocked(db.update).mockClear();
     vi.mocked(db.delete).mockClear();
 
@@ -60,7 +60,7 @@ describe("upsertAsset", () => {
   });
 
   it("does not overwrite a shared asset's CoinMarketCap ID or touch the cache", async () => {
-    selectResolves([{ id: "asset-1", currency: "USD", externalId: "1" }]);
+    selectResolves([{ id: "asset-1", currency: "USD", market: "US", externalId: "1" }]);
     vi.mocked(db.update).mockClear();
     vi.mocked(db.delete).mockClear();
 
@@ -70,6 +70,19 @@ describe("upsertAsset", () => {
 
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  it("repairs an existing SET asset that was incorrectly stored as USD", async () => {
+    selectResolves([{ id: "asset-ptt", currency: "USD", market: "SET" }]);
+    const update = vi.mocked(db.update).mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+    } as never);
+
+    await expect(
+      upsertAsset({ symbol: "PTT", name: "PTT Public Company Limited", type: "stock", market: "SET" })
+    ).resolves.toBe("asset-ptt");
+
+    expect(update).toHaveBeenCalled();
   });
 });
 
