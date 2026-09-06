@@ -8,6 +8,7 @@ import {
   getUserTransactions,
 } from "@/lib/services/view-service";
 import { monthlyBreakdown, toUsdReportTxs } from "@/lib/services/report-service";
+import { buildDashboardInsights } from "@/lib/services/dashboard-insights-service";
 import { requireUserId } from "@/lib/session";
 import { fmtMonthYear } from "@/lib/utils/date";
 import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
@@ -20,6 +21,7 @@ import {
   HoldingsList,
 } from "@/components/features/holdings-list";
 import { CompactMoney } from "@/components/features/compact-money";
+import { DashboardRiskMovers } from "@/components/features/dashboard-risk-movers";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
 import {
@@ -70,6 +72,15 @@ export default async function DashboardPage() {
     }));
 
   const holdings = view.rows.filter((r) => r.position.qty > 0);
+  const insights = buildDashboardInsights(
+    holdings.map((holding) => ({
+      symbol: holding.asset.symbol,
+      name: holding.asset.name,
+      valueUsd: holding.valueUsd,
+      previousClose: holding.previousClose,
+      dayChangePct: holding.dayChangePct,
+    }))
+  );
 
   // monthly cash-flow in USD, then displayed in base currency
   const monthly = monthlyBreakdown(await toUsdReportTxs(txs)).reverse();
@@ -139,6 +150,15 @@ export default async function DashboardPage() {
               label="Contribution"
               currency={baseCurrency}
             />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Risk &amp; movers</CardTitle>
+            <CardDescription>Concentration and daily price movement</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DashboardRiskMovers insights={insights} currency={baseCurrency} rate={rate} />
           </CardContent>
         </Card>
       </div>

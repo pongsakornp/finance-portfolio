@@ -112,55 +112,44 @@ export default async function TransactionsPage() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="flex flex-col gap-2 md:hidden">
+              <ol className="flex flex-col divide-y md:hidden">
                 {ledger.map((tx) => (
-                  <Card key={tx.id}>
-                    <CardContent className="flex flex-col gap-1.5 p-4">
-                      <div className="flex items-center justify-between gap-2">
+                  <li key={tx.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <Badge
-                            variant={
-                              tx.type === "buy" ? "default" : "warning"
-                            }
+                            variant={tx.type === "buy" ? "default" : "warning"}
                             className="capitalize"
                           >
                             {tx.type}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">{fmtDate(tx.occurredAt)}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <TransactionDialog portfolios={portfolios} transaction={tx} />
-                          <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
-                        </div>
-                      </div>
-                      <div>
-                        <span className="font-medium">
-                          {tx.asset.name !== tx.asset.symbol && (
-                            <span className="mr-1.5 text-xs font-normal text-muted-foreground">{tx.asset.symbol}</span>
-                          )}
-                          {tx.asset.name}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {" "}
-                          · {nameById.get(tx.portfolioId) ?? "—"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="tabular-nums">
-                          {fmtQty(parseFloat(tx.quantity))}
-                          <span className="text-muted-foreground">
-                            {" "}
-                            @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}
+                          <span className="truncate text-sm font-medium">
+                            {tx.asset.symbol}
+                            {tx.asset.name !== tx.asset.symbol && (
+                              <span className="text-muted-foreground"> · {tx.asset.name}</span>
+                            )}
                           </span>
-                        </span>
-                        <span className="tabular-nums text-muted-foreground">
-                          {parseFloat(tx.fee) ? `Fee ${fmtMoney(parseFloat(tx.fee), tx.asset.currency)}` : ""}
-                        </span>
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {fmtDate(tx.occurredAt)} · {nameById.get(tx.portfolioId) ?? "—"}
+                        </div>
+                        <div className="mt-1 text-sm tabular-nums">
+                          {fmtQty(parseFloat(tx.quantity))}
+                          <span className="text-muted-foreground"> @ {fmtMoney(parseFloat(tx.price), tx.asset.currency)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {" · "}Fee {parseFloat(tx.fee) ? fmtMoney(parseFloat(tx.fee), tx.asset.currency) : "—"}
+                          </span>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <TransactionDialog portfolios={portfolios} transaction={tx} />
+                        <DeleteButton action={deleteTransactionAction.bind(null, tx.id)} />
+                      </div>
+                    </div>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </>
           )}
         </CardContent>

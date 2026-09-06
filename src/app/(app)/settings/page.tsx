@@ -5,6 +5,7 @@ import { CurrencySwitcher } from "@/components/currency-switcher";
 import { ImportClient } from "@/components/features/import-client";
 import { PlViewSetting } from "@/components/features/pl-view-setting";
 import { ThemeSetting } from "@/components/features/theme-setting";
+import { PortfolioOrderManager } from "@/components/features/portfolio-order-manager";
 import { db } from "@/lib/db";
 import { apiKeys, users } from "@/lib/db/schema";
 import { requireUserId } from "@/lib/session";
@@ -64,6 +65,29 @@ export default async function SettingsPage() {
             <div className="text-sm font-medium">P/L basis in holdings</div>
             <PlViewSetting value={userRow?.plView ?? "unrealized"} />
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Portfolio order</CardTitle>
+          <CardDescription>
+            Drag portfolios to reorder them. The first portfolio is your default.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {portfolios.length === 0 ? (
+            <Empty className="p-8">
+              <EmptyDescription>Create a portfolio first.</EmptyDescription>
+            </Empty>
+          ) : (
+            <PortfolioOrderManager
+              key={portfolios.map((portfolio) => portfolio.id).join(",")}
+              portfolios={portfolios.map((portfolio) => ({
+                id: portfolio.id,
+                name: portfolio.name,
+              }))}
+            />
+          )}
         </CardContent>
       </Card>
       <Card>

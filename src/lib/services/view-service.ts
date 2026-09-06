@@ -38,7 +38,11 @@ export async function getUserTransactions(
 }
 
 export async function getUserPortfolios(userId: string) {
-  return db.select().from(portfolios).where(eq(portfolios.userId, userId));
+  return db
+    .select()
+    .from(portfolios)
+    .where(eq(portfolios.userId, userId))
+    .orderBy(asc(portfolios.sortOrder), asc(portfolios.createdAt), asc(portfolios.id));
 }
 
 export type HoldingRow = {

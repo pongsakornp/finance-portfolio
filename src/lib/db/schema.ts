@@ -43,6 +43,8 @@ export const portfolios = pgTable("portfolios", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  // The first portfolio in a user's explicit order is their default portfolio.
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
