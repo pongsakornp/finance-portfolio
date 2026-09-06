@@ -1,11 +1,9 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
 import { requireUserId } from "@/lib/session";
+import { setUserBaseCurrency, setUserPlView } from "@/lib/services/user-settings-service";
 import { setBaseCurrencySchema, setPlViewSchema } from "@/lib/validators/alert.schema";
 
 export async function setBaseCurrencyAction(formData: FormData) {
@@ -15,10 +13,7 @@ export async function setBaseCurrencyAction(formData: FormData) {
   });
   if (!parsed.success) return { error: "Invalid currency" };
 
-  await db
-    .update(users)
-    .set({ baseCurrency: parsed.data.baseCurrency })
-    .where(eq(users.id, userId));
+  await setUserBaseCurrency(userId, parsed.data.baseCurrency);
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -30,10 +25,7 @@ export async function setPlViewAction(formData: FormData) {
   });
   if (!parsed.success) return { error: "Invalid P/L view" };
 
-  await db
-    .update(users)
-    .set({ plView: parsed.data.plView })
-    .where(eq(users.id, userId));
+  await setUserPlView(userId, parsed.data.plView);
   revalidatePath("/", "layout");
   return { ok: true };
 }

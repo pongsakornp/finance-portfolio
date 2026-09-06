@@ -1,8 +1,9 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { assets, priceCache, priceHistory } from "@/lib/db/schema";
 import { fetchCoinMarketCapQuote } from "@/lib/services/coinmarketcap-service";
+import { upsertAsset } from "@/lib/services/transaction-service";
 import { dayKey } from "@/lib/utils/date";
 
 export type Asset = typeof assets.$inferSelect;
@@ -15,6 +16,13 @@ export type Quote = {
   currency: string;
   price: number;
   previousClose: number | null;
+};
+
+export type QuoteRequest = {
+  symbol: string;
+  assetType: Exclude<Asset["type"], "cash">;
+  assetMarket: "US" | "SET";
+  externalId?: string;
 };
 
 type FetchResult = {
@@ -273,4 +281,30 @@ export async function getQuote(asset: Asset): Promise<Quote> {
     }
     throw new Error(`No quote available for ${asset.symbol}`);
   }
+}
+
+/** Resolve an asset symbol through the shared asset registry before quoting it. */
+export async function getQuoteForRequest(request: QuoteRequest): Promise<{ quote: Quote; assetCreated: boolean }> {
+  const symbol = request.symbol.trim().toUpperCase();
+  if (request.assetType === "crypto" && !/^[1-9]\d*$/.test(request.externalId ?? "")) {
+    throw new Error(`CoinMarketCap ID is required for ${symbol}`);
+  }
+  let [asset] = await db
+    .select()
+    .from(assets)
+    .where(and(eq(assets.symbol, symbol), eq(assets.type, request.assetType)))
+    .limit(1);
+  const assetCreated = !asset;
+  if (!asset) {
+    const id = await upsertAsset({
+      symbol,
+      name: symbol,
+      type: request.assetType,
+      market: request.assetMarket,
+      externalId: request.externalId,
+    });
+    [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+  }
+  if (!asset) throw new Error(`Unknown asset ${symbol}`);
+  return { quote: await getQuote(asset), assetCreated };
 }

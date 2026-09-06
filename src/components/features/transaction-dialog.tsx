@@ -10,6 +10,7 @@ import {
   updateTransactionAction,
 } from "@/actions/transaction.actions";
 import { searchCryptoAssetsAction, type CryptoOption } from "@/actions/crypto.actions";
+import { searchCommoditiesAction, type CommodityOption } from "@/actions/commodity.actions";
 import { searchFundsAction } from "@/actions/fund.actions";
 import { searchStocksAction, type StockOption } from "@/actions/stock.actions";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,9 @@ export function TransactionDialog({
   const [cryptoQuery, setCryptoQuery] = useState("");
   const [cryptoRows, setCryptoRows] = useState<CryptoOption[]>([]);
   const [cryptoValue, setCryptoValue] = useState<CryptoOption | null>(null);
+  const [commodityQuery, setCommodityQuery] = useState("");
+  const [commodityRows, setCommodityRows] = useState<CommodityOption[]>([]);
+  const [commodityValue, setCommodityValue] = useState<CommodityOption | null>(null);
   const [stockQuery, setStockQuery] = useState("");
   const [stockRows, setStockRows] = useState<StockOption[]>([]);
   const [stockValue, setStockValue] = useState<StockOption | null>(null);
@@ -101,6 +105,15 @@ export function TransactionDialog({
     }, 150);
     return () => clearTimeout(t);
   }, [assetChoice, fundQuery, open]);
+
+  // Yahoo futures suggestions only include symbols that quote-service can price.
+  useEffect(() => {
+    if (assetChoice !== "commodity" || !open) return;
+    const t = setTimeout(() => {
+      searchCommoditiesAction(commodityQuery).then(setCommodityRows).catch(() => setCommodityRows([]));
+    }, 150);
+    return () => clearTimeout(t);
+  }, [assetChoice, commodityQuery, open]);
 
   // CMC catalog suggestions are DB-backed; the service warms an empty catalog once.
   useEffect(() => {
@@ -138,6 +151,12 @@ export function TransactionDialog({
       setCryptoValue(
         isEdit && transaction.asset.type === "crypto" && transaction.asset.externalId
           ? { value: transaction.asset.symbol, label: transaction.asset.name, cmcId: transaction.asset.externalId }
+          : null
+      );
+      setCommodityQuery(isEdit && transaction.asset.type === "commodity" ? transaction.asset.symbol : "");
+      setCommodityValue(
+        isEdit && transaction.asset.type === "commodity"
+          ? { value: transaction.asset.symbol, label: transaction.asset.name }
           : null
       );
       const isRegionalAsset = isEdit && (transaction.asset.type === "stock" || transaction.asset.type === "etf");
@@ -334,6 +353,37 @@ export function TransactionDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
+                ) : assetType === "commodity" ? (
+                  <Combobox
+                    items={commodityRows}
+                    value={commodityValue}
+                    onValueChange={(v) => setCommodityValue(v as CommodityOption | null)}
+                    onInputValueChange={(v) => {
+                      setCommodityQuery(v);
+                      if (commodityValue && v.toUpperCase() !== commodityValue.value) setCommodityValue(null);
+                    }}
+                    filter={null}
+                    itemToStringValue={(it) => (it as CommodityOption).value}
+                    itemToStringLabel={(it) => (it as CommodityOption).value}
+                  >
+                    <input type="hidden" name="symbol" value={commodityValue?.value ?? commodityQuery} />
+                    <input type="hidden" name="assetName" value={commodityValue?.label ?? ""} />
+                    <ComboboxInput
+                      placeholder="Search commodity (e.g. gold) or enter symbol…"
+                      showClear
+                      className="w-full uppercase"
+                    />
+                    <ComboboxContent className="w-[min(30rem,var(--available-width))] min-w-[min(30rem,var(--available-width))]">
+                      <ComboboxList>
+                        {commodityRows.map((commodity) => (
+                          <ComboboxItem key={commodity.value} value={commodity} className="flex-col items-start">
+                            <span className="w-full whitespace-nowrap font-medium uppercase">{commodity.value}</span>
+                            <span className="w-full truncate text-muted-foreground">{commodity.label}</span>
+                          </ComboboxItem>
+                        ))}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
                 ) : assetChoice === "US" || assetChoice === "SET" ? (
                   <Combobox
                     items={stockRows}
@@ -366,15 +416,7 @@ export function TransactionDialog({
                       </ComboboxList>
                     </ComboboxContent>
                   </Combobox>
-                ) : (
-                  <Input
-                    name="symbol"
-                    required
-                    defaultValue={transaction?.asset.symbol}
-                    placeholder="XAUUSD=X (gold), CL=F (oil)"
-                    className="uppercase"
-                  />
-                )}
+                ) : null}
               </FieldContent>
             </Field>
 
