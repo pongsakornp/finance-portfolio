@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 
 import { db } from "@/lib/db";
@@ -10,6 +10,13 @@ import { getRate, loadFxHistory } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
 
 const HISTORY_YEARS = 5;
+const HISTORY_FRESHNESS_DAYS = 3;
+const HISTORY_FETCH_TIMEOUT_MS = 5_000;
+
+// Coalesce concurrent chart requests for the same asset. Without this, opening
+// or navigating between pages while a history backfill is running can start the
+// same multi-year upstream download and DB upsert more than once.
+const historyBackfills = new Map<string, Promise<void>>();
 
 export type SeriesPoint = { day: string; value: number };
 
@@ -32,6 +39,7 @@ async function yahooChart(url: string): Promise<Map<string, number>> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (portfolio-tracker)" },
     cache: "no-store",
+    signal: AbortSignal.timeout(HISTORY_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Yahoo history: HTTP ${res.status}`);
   const json = (await res.json()) as YahooHistory;
@@ -57,7 +65,7 @@ async function finnomenaHistory(symbol: string): Promise<Map<string, number>> {
   const from = to - (HISTORY_YEARS * 366 + 1) * 86400;
   const res = await fetch(
     `https://www.finnomena.com/fn3/api/fund/v2/public/tv/history?symbol=${encodeURIComponent(symbol)}&resolution=1D&from=${from}&to=${to}`,
-    { cache: "no-store" }
+    { cache: "no-store", signal: AbortSignal.timeout(HISTORY_FETCH_TIMEOUT_MS) }
   );
   if (!res.ok) throw new Error(`Finnomena history ${symbol}: HTTP ${res.status}`);
   const json = (await res.json()) as { s: string; t?: number[]; c?: number[] };
@@ -75,7 +83,11 @@ async function finnomenaHistory(symbol: string): Promise<Map<string, number>> {
 async function finnomenaStockHistory(symbol: string): Promise<Map<string, number>> {
   const res = await fetch(
     `https://www.finnomena.com/market-info/api/tradingview/TH/trade/${encodeURIComponent(symbol)}?period=MAX`,
-    { headers: { Accept: "application/json" }, cache: "no-store" }
+    {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(HISTORY_FETCH_TIMEOUT_MS),
+    }
   );
   if (!res.ok) throw new Error(`Finnomena history ${symbol}: HTTP ${res.status}`);
   const json = (await res.json()) as { t?: number[]; c?: Array<string | number> };
@@ -87,22 +99,22 @@ async function finnomenaStockHistory(symbol: string): Promise<Map<string, number
   return out;
 }
 
+export function isHistoryFresh(latestDay: string | undefined, cutoff: string): boolean {
+  return latestDay !== undefined && latestDay >= cutoff;
+}
+
 /** Backfills daily closes into price_history when stale (>3 days). */
-async function ensureHistory(asset: Asset): Promise<void> {
-  const cutoff = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
+async function ensureHistoryUnshared(asset: Asset): Promise<void> {
+  const cutoff = new Date(
+    Date.now() - HISTORY_FRESHNESS_DAYS * 86400_000
+  ).toISOString().slice(0, 10);
   const [historical] = await db
     .select({ day: priceHistory.day })
     .from(priceHistory)
-    .where(
-      and(
-        eq(priceHistory.assetId, asset.id),
-        eq(priceHistory.source, 1),
-        lt(priceHistory.day, cutoff),
-      )
-    )
+    .where(and(eq(priceHistory.assetId, asset.id), eq(priceHistory.source, 1)))
     .orderBy(desc(priceHistory.day))
     .limit(1);
-  if (historical) return; // official close history already backfilled
+  if (isHistoryFresh(historical?.day, cutoff)) return; // official close history already backfilled
 
   try {
     const closes =
@@ -137,6 +149,17 @@ async function ensureHistory(asset: Asset): Promise<void> {
   } catch {
     // free API hiccup — series degrades gracefully below
   }
+}
+
+async function ensureHistory(asset: Asset): Promise<void> {
+  const pending = historyBackfills.get(asset.id);
+  if (pending) return pending;
+
+  const backfill = ensureHistoryUnshared(asset).finally(() => {
+    historyBackfills.delete(asset.id);
+  });
+  historyBackfills.set(asset.id, backfill);
+  return backfill;
 }
 
 /** Daily backfill of price history for every asset (cron). */
