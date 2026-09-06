@@ -29,13 +29,36 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
-  passwordHash: text("password_hash").notNull(),
+  // Password-less OAuth accounts are supported alongside credentials accounts.
+  passwordHash: text("password_hash"),
   baseCurrency: text("base_currency").notNull().default("USD"), // "USD" | "THB"
   plView: text("pl_view").notNull().default("unrealized"), // "unrealized" | "daily"
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * Stable external identities for OAuth users. Sessions remain JWT-based, so this
+ * is intentionally narrower than Auth.js's full adapter schema.
+ */
+export const oauthAccounts = pgTable(
+  "oauth_accounts",
+  {
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.provider, t.providerAccountId] }),
+    index("oauth_accounts_user_id_idx").on(t.userId),
+  ]
+);
 
 export const portfolios = pgTable("portfolios", {
   id: uuid("id").defaultRandom().primaryKey(),

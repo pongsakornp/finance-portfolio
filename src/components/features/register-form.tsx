@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { registerAction, type FormState } from "@/actions/auth.actions";
+import { OAuthSignInButtons } from "@/components/features/OAuthSignInButtons";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,8 +21,9 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
+import type { OAuthProviderId } from "@/lib/auth-providers";
 
-export function RegisterForm() {
+export function RegisterForm({ providers }: { providers: OAuthProviderId[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     async (prev, fd) => await registerAction(prev, fd),
     {}
@@ -72,6 +74,7 @@ export function RegisterForm() {
               Sign in
             </Link>
           </p>
+          <OAuthSignInButtons providers={providers} />
         </CardFooter>
       </form>
     </Card>

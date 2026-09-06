@@ -25,6 +25,10 @@ services:
       DATABASE_URL: postgres://finance:${POSTGRES_PASSWORD}@db:5432/finance
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in Dokploy env}
       AUTH_URL: ${AUTH_URL:-}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      AUTH_LINE_ID: ${AUTH_LINE_ID:-}
+      AUTH_LINE_SECRET: ${AUTH_LINE_SECRET:-}
       COINMARKETCAP_API_KEY: ${COINMARKETCAP_API_KEY:?set COINMARKETCAP_API_KEY in Dokploy env}
       CRON_ENABLED: ${CRON_ENABLED:-true}
       NODE_ENV: production
