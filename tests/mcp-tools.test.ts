@@ -29,6 +29,7 @@ const buildHoldingsView = vi.hoisted(() =>
     },
   })
 );
+const getPortfolioHoldingsSnapshot = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/services/portfolio-service", () => ({ assertOwnedPortfolio }));
 vi.mock("@/lib/services/quote-service", () => ({ getQuote }));
@@ -37,6 +38,7 @@ vi.mock("@/lib/services/view-service", () => ({
   getUserTransactions,
   buildHoldingsView,
 }));
+vi.mock("@/lib/services/portfolio-export-service", () => ({ getPortfolioHoldingsSnapshot }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 vi.mock("@/lib/db", () => {
@@ -154,8 +156,34 @@ describe("MCP tools", () => {
     const res = await registeredTools["list_portfolios"].handler({});
     const data = JSON.parse(res.content[0].text);
 
-    expect(data).toHaveLength(1);
-    expect(data[0].holdingsCount).toBe(1); // TSLA with qty 0 is excluded
+    expect(data.baseCurrency).toBe("USD");
+    expect(data.portfolios).toHaveLength(1);
+    expect(data.portfolios[0].holdingsCount).toBe(1); // TSLA with qty 0 is excluded
+  });
+
+  it("registers the lean 23-tool MCP surface", () => {
+    const server = buildMcpServer("user-1");
+    const names = Object.keys((server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools).sort();
+    expect(names).toEqual([
+      "add_transaction", "create_alert", "create_portfolio", "delete_alert", "delete_portfolio",
+      "delete_transaction", "get_benchmark_comparison", "get_monthly_report", "get_portfolio_history",
+      "get_portfolio_snapshot", "get_portfolio_summary", "get_quote", "get_transactions", "import_transactions",
+      "list_alerts", "list_portfolios", "rename_portfolio", "reorder_portfolios", "search_assets",
+      "set_base_currency", "toggle_alert", "update_transaction", "what_if_sell",
+    ]);
+    expect(names).not.toContain("get_holdings");
+    expect(names).not.toContain("convert_currency");
+  });
+
+  it("returns the shared portfolio snapshot unchanged", async () => {
+    const portfolioId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    getPortfolioHoldingsSnapshot.mockResolvedValueOnce({
+      portfolio: { id: portfolioId, name: "Main" }, baseCurrency: "THB", totals: {}, holdings: [], exportedAt: "2026-09-06T00:00:00.000Z",
+    });
+    const server = buildMcpServer("user-1");
+    const registeredTools = (server as unknown as { _registeredTools: Record<string, { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }> })._registeredTools;
+    const res = await registeredTools["get_portfolio_snapshot"].handler({ portfolioId });
+    expect(JSON.parse(res.content[0].text)).toMatchObject({ portfolio: { id: portfolioId }, baseCurrency: "THB" });
   });
 
   it("what_if_sell skips closed positions and finds active holding", async () => {

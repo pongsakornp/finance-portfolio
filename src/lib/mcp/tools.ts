@@ -1,32 +1,38 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
-import { alerts, assets, users } from "@/lib/db/schema";
-import { convert } from "@/lib/services/fx-service";
+import { baseRate, loadFxHistory } from "@/lib/services/fx-service";
 import { buildHoldingsView, getUserTransactions, getUserPortfolios } from "@/lib/services/view-service";
-import { monthlyBreakdown } from "@/lib/services/report-service";
+import { monthlyBreakdown, toBaseReportTxs } from "@/lib/services/report-service";
 import { benchmarkSeries, portfolioSeries } from "@/lib/services/valuation-service";
-import { getQuote } from "@/lib/services/quote-service";
+import { getQuoteForRequest } from "@/lib/services/quote-service";
+import { getPortfolioHoldingsSnapshot } from "@/lib/services/portfolio-export-service";
+import { getUserBaseCurrency, setUserBaseCurrency } from "@/lib/services/user-settings-service";
+import { createAlert, deleteAlert, listAlerts, setAlertActive } from "@/lib/services/alert-service";
+import { searchStocks } from "@/lib/services/stock-search-service";
+import { searchCryptoCatalog } from "@/lib/services/crypto-catalog-service";
+import { searchCommodities } from "@/lib/services/commodity-search-service";
+import { searchFundCatalog } from "@/lib/services/fund-catalog-service";
 import {
   assertOwnedPortfolio,
   createPortfolio,
   deletePortfolio,
   renamePortfolio,
+  reorderPortfolios,
 } from "@/lib/services/portfolio-service";
 import {
   createTransaction,
   deleteTransaction,
   importTransactions,
-  upsertAsset,
+  updateTransaction,
 } from "@/lib/services/transaction-service";
 import { whatIfSell } from "@/lib/services/holdings-service";
 import {
   createAlertSchema,
   setBaseCurrencySchema,
 } from "@/lib/validators/alert.schema";
+import { reorderPortfoliosSchema } from "@/lib/validators/portfolio.schema";
 import {
   ASSET_TYPES,
   transactionObjectBaseSchema,
@@ -77,6 +83,34 @@ async function loadViews(userId: string, portfolioId?: string) {
   );
 }
 
+function convertTotals(totals: {
+  marketValue: number; costBasis: number; unrealizedPL: number; realizedPL: number; dayChange: number;
+  unrealizedPLPct: number; dayChangePct: number;
+}, rate: number) {
+  const money = (value: number) => Math.round(value * rate * 100) / 100;
+  return {
+    marketValue: money(totals.marketValue),
+    costBasis: money(totals.costBasis),
+    unrealizedPL: money(totals.unrealizedPL),
+    unrealizedPLPct: totals.unrealizedPLPct,
+    realizedPL: money(totals.realizedPL),
+    dayChange: money(totals.dayChange),
+    dayChangePct: totals.dayChangePct,
+  };
+}
+
+async function convertUsdSeries(points: Array<{ day: string; value: number }>, baseCurrency: string) {
+  if (baseCurrency === "USD" || points.length === 0) return points;
+  const current = await baseRate(baseCurrency);
+  const history = await loadFxHistory([baseCurrency], points[0].day);
+  const baseToUsd = history.get(baseCurrency);
+  return points.map((point) => {
+    const rate = baseToUsd?.get(point.day);
+    const usdToBase = rate && rate > 0 ? 1 / rate : current;
+    return { day: point.day, value: Math.round(point.value * usdToBase * 100) / 100 };
+  });
+}
+
 export function buildMcpServer(userId: string): McpServer {
   const server = new McpServer({
     name: "seabiscuit-portfolio",
@@ -89,19 +123,23 @@ export function buildMcpServer(userId: string): McpServer {
     "list_portfolios",
     {
       description:
-        "List the user's portfolios with USD totals: market value, cost basis, unrealized/realized P/L, day change.",
+        "List the user's portfolios with totals in the user's selected base currency.",
       inputSchema: {},
     },
     async () => {
       try {
-        const views = await loadViews(userId);
+        const [views, baseCurrency] = await Promise.all([loadViews(userId), getUserBaseCurrency(userId)]);
+        const rate = await baseRate(baseCurrency);
         return okJson(
-          views.map(({ portfolio, view }) => ({
-            id: portfolio.id,
-            name: portfolio.name,
-            holdingsCount: view.rows.filter((r) => r.position.qty > 0).length,
-            totals: view.totalsUsd,
-          })),
+          {
+            baseCurrency,
+            portfolios: views.map(({ portfolio, view }) => ({
+              id: portfolio.id,
+              name: portfolio.name,
+              holdingsCount: view.rows.filter((r) => r.position.qty > 0).length,
+              totals: convertTotals(view.totalsUsd, rate),
+            })),
+          },
         );
       } catch (e) {
         return asError(e);
@@ -110,35 +148,14 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   server.registerTool(
-    "get_holdings",
+    "get_portfolio_snapshot",
     {
-      description:
-        "Current positions with avg cost and live quotes, normalized to USD. Omit portfolioId for all portfolios.",
-      inputSchema: { portfolioId: z.uuid().optional() },
+      description: "Complete current holdings snapshot for one owned portfolio, in the user's base currency.",
+      inputSchema: { portfolioId: z.uuid() },
     },
     async ({ portfolioId }) => {
       try {
-        const views = await loadViews(userId, portfolioId);
-        return okJson(
-          views.flatMap(({ portfolio, view }) =>
-            view.rows.map((r) => ({
-              portfolio: portfolio.name,
-              symbol: r.asset.symbol,
-              name: r.asset.name,
-              type: r.asset.type,
-              currency: r.asset.currency,
-              qty: r.position.qty,
-              avgCost: r.position.avgCost,
-              currentPrice: r.price,
-              previousClose: r.previousClose,
-              valueUsd: r.valueUsd,
-              costUsd: r.costUsd,
-              unrealizedPL: r.valueUsd - r.costUsd,
-              unrealizedPLPct: r.position.unrealizedPLPct,
-              realizedPL: r.position.realizedPL,
-            }))
-          )
-        );
+        return okJson(await getPortfolioHoldingsSnapshot(userId, portfolioId));
       } catch (e) {
         return asError(e);
       }
@@ -149,12 +166,12 @@ export function buildMcpServer(userId: string): McpServer {
     "get_portfolio_summary",
     {
       description:
-        "Aggregate totals per portfolio (or combined across all): value, cost, P/L, day change.",
+        "Aggregate totals for one portfolio or all portfolios in the user's selected base currency.",
       inputSchema: { portfolioId: z.uuid().optional() },
     },
     async ({ portfolioId }) => {
       try {
-        const views = await loadViews(userId, portfolioId);
+        const [views, baseCurrency] = await Promise.all([loadViews(userId, portfolioId), getUserBaseCurrency(userId)]);
         const t = views.map((v) => v.view.totalsUsd);
         const sum = (k: "marketValue" | "costBasis" | "realizedPL" | "dayChange") =>
           t.reduce((a, x) => a + x[k], 0);
@@ -162,7 +179,7 @@ export function buildMcpServer(userId: string): McpServer {
         const cost = sum("costBasis");
         const dayChange = sum("dayChange");
         const prevMv = mv - dayChange;
-        const out = views.length === 1
+        const totals = views.length === 1
           ? t[0]
           : {
               marketValue: Math.round(mv * 100) / 100,
@@ -173,7 +190,7 @@ export function buildMcpServer(userId: string): McpServer {
               dayChange: Math.round(dayChange * 100) / 100,
               dayChangePct: prevMv > 0 ? parseFloat((dayChange / prevMv * 100).toFixed(2)) : 0,
             };
-        return okJson(out);
+        return okJson({ baseCurrency, totals: convertTotals(totals, await baseRate(baseCurrency)) });
       } catch (e) {
         return asError(e);
       }
@@ -205,20 +222,26 @@ export function buildMcpServer(userId: string): McpServer {
           const d = new Date(since);
           rows = rows.filter((r) => r.occurredAt >= d);
         }
-        return okJson(
-          rows.slice(-limit).map((r) => ({
+        return okJson({
+          transactions: rows.slice(-limit).map((r) => ({
             id: r.id,
             portfolioId: r.portfolioId,
             occurredAt: r.occurredAt.toISOString(),
             type: r.type,
             symbol: r.asset.symbol,
             assetType: r.asset.type,
+            assetName: r.asset.name,
+            assetNameEn: r.asset.nameEn,
+            assetNameTh: r.asset.nameTh,
+            currency: r.asset.currency,
+            market: r.asset.market,
+            externalId: r.asset.externalId,
             quantity: parseFloat(r.quantity),
             price: parseFloat(r.price),
             fee: parseFloat(r.fee),
             note: r.note,
-          }))
-        );
+          })),
+        });
       } catch (e) {
         return asError(e);
       }
@@ -229,7 +252,7 @@ export function buildMcpServer(userId: string): McpServer {
     "get_portfolio_history",
     {
       description:
-        "Daily USD portfolio value reconstructed from historical closes. days clamped 7–365, default 90.",
+        "Daily portfolio value in the user's base currency, reconstructed from historical closes. days 7–365, default 90.",
       inputSchema: {
         portfolioId: z.uuid().optional(),
         days: z.number().int().min(7).max(365).default(90),
@@ -238,8 +261,8 @@ export function buildMcpServer(userId: string): McpServer {
     async ({ portfolioId, days }) => {
       try {
         if (portfolioId) await assertOwnedPortfolio(portfolioId, userId);
-        const txs = await getUserTransactions(userId, portfolioId);
-        return okJson(await portfolioSeries(txs, days));
+        const [txs, baseCurrency] = await Promise.all([getUserTransactions(userId, portfolioId), getUserBaseCurrency(userId)]);
+        return okJson({ baseCurrency, points: await convertUsdSeries(await portfolioSeries(txs, days), baseCurrency) });
       } catch (e) {
         return asError(e);
       }
@@ -250,7 +273,7 @@ export function buildMcpServer(userId: string): McpServer {
     "get_benchmark_comparison",
     {
       description:
-        "Portfolio daily value vs S&P 500 index closes (absolute levels, not normalized).",
+        "Portfolio value in the user's base currency versus S&P 500 index points (absolute levels, not normalized).",
       inputSchema: {
         portfolioId: z.uuid().optional(),
         days: z.number().int().min(7).max(365).default(90),
@@ -259,12 +282,16 @@ export function buildMcpServer(userId: string): McpServer {
     async ({ portfolioId, days }) => {
       try {
         if (portfolioId) await assertOwnedPortfolio(portfolioId, userId);
-        const txs = await getUserTransactions(userId, portfolioId);
+        const [txs, baseCurrency] = await Promise.all([getUserTransactions(userId, portfolioId), getUserBaseCurrency(userId)]);
         const [series, bench] = await Promise.all([
           portfolioSeries(txs, days),
           benchmarkSeries(days),
         ]);
-        return okJson({ portfolio: series, benchmark: bench });
+        return okJson({
+          baseCurrency,
+          portfolio: await convertUsdSeries(series, baseCurrency),
+          benchmark: { symbol: "^GSPC", unit: "index-points", points: bench },
+        });
       } catch (e) {
         return asError(e);
       }
@@ -275,14 +302,14 @@ export function buildMcpServer(userId: string): McpServer {
     "get_monthly_report",
     {
       description:
-        "Monthly invested/sold/fees breakdown. Amounts in each asset's native currency (not converted).",
+        "Monthly invested, proceeds, fees, and realized P/L in the user's selected base currency.",
       inputSchema: { portfolioId: z.uuid().optional() },
     },
     async ({ portfolioId }) => {
       try {
         if (portfolioId) await assertOwnedPortfolio(portfolioId, userId);
-        const txs = await getUserTransactions(userId, portfolioId);
-        return okJson(monthlyBreakdown(txs));
+        const [txs, baseCurrency] = await Promise.all([getUserTransactions(userId, portfolioId), getUserBaseCurrency(userId)]);
+        return okJson({ baseCurrency, rows: monthlyBreakdown(await toBaseReportTxs(txs, baseCurrency)) });
       } catch (e) {
         return asError(e);
       }
@@ -298,31 +325,19 @@ export function buildMcpServer(userId: string): McpServer {
         symbol: z.string().min(1).max(20),
         assetType: z.enum(ASSET_TYPES).optional(),
         assetMarket: z.enum(["US", "SET"]).optional(),
+        externalId: z.string().max(60).optional(),
       },
     },
-    async ({ symbol, assetType, assetMarket }) => {
+    async ({ symbol, assetType, assetMarket, externalId }) => {
       try {
-        let [asset] = await db
-          .select()
-          .from(assets)
-          .where(
-            and(
-              eq(assets.symbol, symbol.toUpperCase()),
-              assetType ? eq(assets.type, assetType) : undefined
-            )
-          )
-          .limit(1);
-        if (!asset) {
-          const id = await upsertAsset({
-            symbol: symbol.toUpperCase(),
-            name: symbol.toUpperCase(),
-            type: assetType ?? "stock",
-            market: assetMarket ?? (symbol.toUpperCase().endsWith(".BK") ? "SET" : "US"),
-          });
-          [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
-        }
-        if (!asset) throw new Error(`Unknown asset ${symbol}`);
-        return okJson(await getQuote(asset));
+        const result = await getQuoteForRequest({
+          symbol,
+          assetType: assetType ?? "stock",
+          assetMarket: assetMarket ?? (symbol.toUpperCase().endsWith(".BK") ? "SET" : "US"),
+          externalId,
+        });
+        if (result.assetCreated) revalidateMutated();
+        return okJson(result);
       } catch (e) {
         return asError(e);
       }
@@ -330,23 +345,33 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   server.registerTool(
-    "convert_currency",
+    "search_assets",
     {
-      description: "Convert an amount between currencies using cached FX rates.",
+      description: "Find stock/ETF, crypto, commodity-futures, or Thai mutual-fund symbols before creating a transaction or alert.",
       inputSchema: {
-        amount: z.number(),
-        from: z.string().length(3),
-        to: z.string().length(3),
+        query: z.string().min(1).max(160),
+        category: z.enum(["security", "crypto", "commodity", "mutualfund"]),
+        market: z.enum(["US", "SET"]).optional(),
+        limit: z.number().int().min(1).max(50).default(10),
       },
     },
-    async ({ amount, from, to }) => {
+    async ({ query, category, market, limit }) => {
       try {
-        return okJson({
-          amount,
-          from: from.toUpperCase(),
-          to: to.toUpperCase(),
-          converted: await convert(amount, from.toUpperCase(), to.toUpperCase()),
-        });
+        if (category === "security") {
+          const resolvedMarket = market ?? "US";
+          const rows = await searchStocks(query, resolvedMarket, limit);
+          return okJson({ results: rows.map((r) => ({ symbol: r.symbol, name: r.nameEn, assetType: r.assetType, market: resolvedMarket })) });
+        }
+        if (category === "crypto") {
+          const rows = await searchCryptoCatalog(query, limit);
+          return okJson({ results: rows.map((r) => ({ symbol: r.symbol, name: r.name, assetType: "crypto", market: "US", externalId: r.cmcId })) });
+        }
+        if (category === "commodity") {
+          const rows = await searchCommodities(query, limit);
+          return okJson({ results: rows.map((r) => ({ symbol: r.symbol, name: r.name, assetType: "commodity", market: "US" })) });
+        }
+        const rows = await searchFundCatalog(query, limit);
+        return okJson({ results: rows.map((r) => ({ symbol: r.shortCode, name: r.name, assetType: "mutualfund", market: "SET" })) });
       } catch (e) {
         return asError(e);
       }
@@ -409,6 +434,25 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   server.registerTool(
+    "reorder_portfolios",
+    {
+      description: "Set the complete ordered portfolio ID list; the first portfolio becomes the default.",
+      inputSchema: reorderPortfoliosSchema.shape,
+    },
+    async (args) => {
+      const parsed = reorderPortfoliosSchema.safeParse(args);
+      if (!parsed.success) return asError(new Error(parsed.error.issues[0]?.message ?? "Invalid portfolio order"));
+      try {
+        await reorderPortfolios(userId, parsed.data.orderedIds);
+        revalidateMutated();
+        return okJson({ orderedIds: parsed.data.orderedIds });
+      } catch (e) {
+        return asError(e);
+      }
+    }
+  );
+
+  server.registerTool(
     "add_transaction",
     {
       description:
@@ -451,6 +495,25 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   server.registerTool(
+    "update_transaction",
+    {
+      description: "Replace one owned transaction. Fields match add_transaction; occurredAt is an ISO datetime.",
+      inputSchema: { transactionId: z.uuid(), ...mcpTxObjectSchema.shape },
+    },
+    async ({ transactionId, ...args }) => {
+      try {
+        const parsed = mcpTxSchema.safeParse(args);
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
+        await updateTransaction(userId, transactionId, { ...parsed.data, occurredAt: new Date(parsed.data.occurredAt) });
+        revalidateMutated();
+        return okJson({ updated: transactionId });
+      } catch (e) {
+        return asError(e);
+      }
+    }
+  );
+
+  server.registerTool(
     "import_transactions",
     {
       description:
@@ -483,8 +546,8 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ baseCurrency }) => {
       try {
-        await db.update(users).set({ baseCurrency }).where(eq(users.id, userId));
-        revalidatePath("/", "layout");
+        await setUserBaseCurrency(userId, baseCurrency);
+        revalidateMutated();
         return okJson({ baseCurrency });
       } catch (e) {
         return asError(e);
@@ -502,22 +565,7 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async () => {
       try {
-        const rows = await db
-          .select({ alert: alerts, asset: assets })
-          .from(alerts)
-          .innerJoin(assets, eq(assets.id, alerts.assetId))
-          .where(eq(alerts.userId, userId));
-        return okJson(
-          rows.map(({ alert, asset }) => ({
-            id: alert.id,
-            symbol: asset.symbol,
-            assetType: asset.type,
-            direction: alert.direction,
-            threshold: parseFloat(alert.threshold),
-            active: alert.active,
-            triggeredAt: alert.triggeredAt,
-          }))
-        );
+        return okJson({ alerts: await listAlerts(userId) });
       } catch (e) {
         return asError(e);
       }
@@ -528,22 +576,14 @@ export function buildMcpServer(userId: string): McpServer {
     "create_alert",
     {
       description: "Create a price alert: notify when price goes above/below a threshold.",
-      inputSchema: createAlertSchema.shape,
+      inputSchema: { ...createAlertSchema.shape, externalId: z.string().max(60).optional() },
     },
-    async ({ symbol, assetType, market, direction, threshold }) => {
+    async ({ symbol, assetType, market, direction, threshold, externalId }) => {
       try {
-        const assetId = await upsertAsset({
-          symbol,
-          name: "",
-          type: assetType,
-          currency: assetType === "crypto" ? "USD" : undefined,
-          market,
-        });
-        const [created] = await db
-          .insert(alerts)
-          .values({ userId, assetId, direction, threshold: String(threshold) })
-          .returning({ id: alerts.id });
-        revalidatePath("/alerts");
+        const parsed = createAlertSchema.safeParse({ symbol, assetType, market, direction, threshold });
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid alert");
+        const created = await createAlert(userId, { ...parsed.data, externalId });
+        revalidateMutated();
         return okJson(created);
       } catch (e) {
         return asError(e);
@@ -559,8 +599,8 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ alertId }) => {
       try {
-        await db.delete(alerts).where(and(eq(alerts.id, alertId), eq(alerts.userId, userId)));
-        revalidatePath("/alerts");
+        await deleteAlert(alertId, userId);
+        revalidateMutated();
         return okJson({ deleted: alertId });
       } catch (e) {
         return asError(e);
@@ -576,11 +616,8 @@ export function buildMcpServer(userId: string): McpServer {
     },
     async ({ alertId, active }) => {
       try {
-        await db
-          .update(alerts)
-          .set({ active, triggeredAt: active ? null : undefined })
-          .where(and(eq(alerts.id, alertId), eq(alerts.userId, userId)));
-        revalidatePath("/alerts");
+        await setAlertActive(alertId, userId, active);
+        revalidateMutated();
         return okJson({ alertId, active });
       } catch (e) {
         return asError(e);

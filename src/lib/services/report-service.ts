@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 
 import { monthKey } from "@/lib/utils/date";
-import { getRate } from "@/lib/services/fx-service";
+import { baseRate, getRate, loadFxHistory } from "@/lib/services/fx-service";
 import type { TxRow } from "@/lib/services/view-service";
 
 export type TxForReport = {
@@ -54,6 +54,41 @@ export async function toUsdReportTxs(txs: TxRow[]): Promise<TxForReport[]> {
     });
   }
   return out;
+}
+
+/** Normalize transaction amounts into the user's base currency using the transaction-day FX history. */
+export async function toBaseReportTxs(txs: TxRow[], baseCurrency: string): Promise<TxForReport[]> {
+  if (txs.length === 0) return [];
+  const fromDay = txs.reduce(
+    (earliest, tx) => (monthKey(tx.occurredAt) < earliest ? monthKey(tx.occurredAt) : earliest),
+    monthKey(txs[0].occurredAt)
+  ) + "-01";
+  const currencies = new Set(txs.map((tx) => tx.asset.currency));
+  if (baseCurrency !== "USD") currencies.add(baseCurrency);
+  const history = await loadFxHistory([...currencies], fromDay);
+  const currentToUsd = new Map<string, Decimal>();
+  for (const currency of currencies) {
+    if (currency !== "USD") currentToUsd.set(currency, await getRate(currency, "USD"));
+  }
+  const currentUsdToBase = baseCurrency === "USD" ? new Decimal(1) : new Decimal(await baseRate(baseCurrency));
+
+  return txs.map((tx) => {
+    const day = tx.occurredAt.toISOString().slice(0, 10);
+    const nativeToUsd = tx.asset.currency === "USD"
+      ? new Decimal(1)
+      : new Decimal(history.get(tx.asset.currency)?.get(day) ?? currentToUsd.get(tx.asset.currency) ?? 1);
+    const baseToUsd = baseCurrency === "USD" ? new Decimal(1) : new Decimal(history.get(baseCurrency)?.get(day) ?? 0);
+    const usdToBase = baseToUsd.gt(0) ? new Decimal(1).div(baseToUsd) : currentUsdToBase;
+    const factor = nativeToUsd.mul(usdToBase);
+    return {
+      assetId: tx.assetId,
+      type: tx.type,
+      quantity: tx.quantity,
+      price: new Decimal(tx.price).mul(factor).toString(),
+      fee: new Decimal(tx.fee).mul(factor).toString(),
+      occurredAt: tx.occurredAt,
+    };
+  });
 }
 
 /** Pure monthly aggregation over transactions. Amounts in asset-native currency — caller converts or filters by currency first. */

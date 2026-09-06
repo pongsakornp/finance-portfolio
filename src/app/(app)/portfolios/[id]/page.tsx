@@ -84,8 +84,9 @@ export default async function PortfolioDetailPage({
         </div>
         <div className="flex items-center gap-2">
           <RenamePortfolioDialog id={id} initialName={row.name} />
-          <Button variant="ghost" size="icon" render={<a href={`/api/export?portfolio=${id}`} download aria-label="Export" />}>
-            <DownloadIcon className="text-muted-foreground" />
+          <Button variant="outline" size="sm" render={<a href={`/api/portfolios/${id}/export`} download />}>
+            <DownloadIcon aria-hidden="true" />
+            Export holdings
           </Button>
           <DeleteButton
             action={deletePortfolioAction.bind(null, id)}
