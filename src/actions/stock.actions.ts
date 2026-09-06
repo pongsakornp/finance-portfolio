@@ -2,7 +2,7 @@
 
 import { searchStocks } from "@/lib/services/stock-search-service";
 
-export type StockOption = { value: string; label: string };
+export type StockOption = { value: string; label: string; assetType: "stock" | "etf" };
 
 export async function searchStocksAction(
   query: string,
@@ -10,5 +10,5 @@ export async function searchStocksAction(
   limit = 10
 ): Promise<StockOption[]> {
   const rows = await searchStocks(query, market, limit);
-  return rows.map((row) => ({ value: row.symbol, label: row.nameEn }));
+  return rows.map((row) => ({ value: row.symbol, label: row.nameEn, assetType: row.assetType }));
 }

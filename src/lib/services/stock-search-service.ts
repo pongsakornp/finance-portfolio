@@ -1,6 +1,7 @@
 export type StockSearchOption = {
   symbol: string;
   nameEn: string;
+  assetType: "stock" | "etf";
 };
 
 type YahooSearchResponse = {
@@ -13,7 +14,7 @@ type YahooSearchResponse = {
   }>;
 };
 
-const US_EXCHANGES = new Set(["ASE", "BTS", "NCM", "NGM", "NMS", "NYQ", "OQB", "PNK"]);
+const US_EXCHANGES = new Set(["ASE", "BTS", "NCM", "NGM", "NMS", "NYQ", "PCX"]);
 
 /**
  * Search Yahoo Finance's instrument index for US or SET securities. SET
@@ -51,6 +52,11 @@ export async function searchStocks(
     const normalizedSymbol = market === "SET" ? symbol.replace(/\.BK$/i, "") : symbol;
     if (seen.has(normalizedSymbol)) return [];
     seen.add(normalizedSymbol);
-    return [{ symbol: normalizedSymbol, nameEn: quote.longname ?? quote.shortname ?? normalizedSymbol }];
+    const assetType: StockSearchOption["assetType"] = quote.quoteType === "ETF" ? "etf" : "stock";
+    return [{
+      symbol: normalizedSymbol,
+      nameEn: quote.longname ?? quote.shortname ?? normalizedSymbol,
+      assetType,
+    }];
   }).slice(0, limit);
 }

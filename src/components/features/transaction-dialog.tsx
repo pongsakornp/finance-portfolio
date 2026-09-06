@@ -55,8 +55,8 @@ function assetChoiceFor(asset?: TxRow["asset"]): AssetChoice {
     : "US";
 }
 
-function assetTypeFor(choice: AssetChoice) {
-  return choice === "US" || choice === "SET" ? "stock" : choice;
+function assetTypeFor(choice: AssetChoice, stock?: StockOption | null) {
+  return choice === "US" || choice === "SET" ? stock?.assetType ?? "stock" : choice;
 }
 
 function marketFor(choice: AssetChoice): "US" | "SET" {
@@ -75,8 +75,6 @@ export function TransactionDialog({
   const isEdit = !!transaction;
   const [open, setOpen] = useState(false);
   const [assetChoice, setAssetChoice] = useState<AssetChoice>(() => assetChoiceFor(transaction?.asset));
-  const assetType = assetTypeFor(assetChoice);
-  const market = marketFor(assetChoice);
   const [txType, setTxType] = useState<"buy" | "sell">(transaction?.type ?? "buy");
   const [portfolioId, setPortfolioId] = useState(
     transaction?.portfolioId ?? defaultPortfolioId ?? portfolios[0]?.id
@@ -90,6 +88,8 @@ export function TransactionDialog({
   const [stockQuery, setStockQuery] = useState("");
   const [stockRows, setStockRows] = useState<StockOption[]>([]);
   const [stockValue, setStockValue] = useState<StockOption | null>(null);
+  const assetType = assetTypeFor(assetChoice, stockValue);
+  const market = marketFor(assetChoice);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -145,7 +145,11 @@ export function TransactionDialog({
       setStockQuery(isRegionalAsset ? transaction.asset.symbol : "");
       setStockValue(
         isRegionalAsset
-          ? { value: transaction.asset.symbol.replace(/\.BK$/i, ""), label: transaction.asset.nameEn ?? transaction.asset.name }
+          ? {
+              value: transaction.asset.symbol.replace(/\.BK$/i, ""),
+              label: transaction.asset.nameEn ?? transaction.asset.name,
+              assetType: transaction.asset.type === "etf" ? "etf" : "stock",
+            }
           : null
       );
     }
@@ -256,6 +260,9 @@ export function TransactionDialog({
                       next === "mutualfund"
                     ) {
                       setAssetChoice(next);
+                      setStockQuery("");
+                      setStockRows([]);
+                      setStockValue(null);
                     }
                   }}
                 >
