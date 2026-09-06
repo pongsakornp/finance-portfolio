@@ -2,7 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 
 // Edge-safe subset: no DB / bcrypt imports here (used by middleware)
 export const authConfig = {
-  pages: { signIn: "/login" },
+  pages: { signIn: "/login", error: "/login" },
   session: { strategy: "jwt" },
   // self-hosted behind Dokploy's reverse proxy — we own the ingress
   trustHost: true,

@@ -37,6 +37,15 @@ The environment name becomes the Compose project name, so containers and the DB 
 
 Create a Compose service from this repo; set env `POSTGRES_PASSWORD`, `AUTH_SECRET` (`openssl rand -base64 32`), and `COINMARKETCAP_API_KEY` (Startup or higher preserves five years of crypto history). The app container runs migrations on boot and exposes `/api/health`.
 
+### Google and LINE sign-in
+
+OAuth login is optional. Set both variables for a provider in Dokploy (or `.env`) to enable its button:
+
+- Google: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`; add `https://<host>/api/auth/callback/google` as an authorized redirect URI in Google Cloud.
+- LINE: `AUTH_LINE_ID`, `AUTH_LINE_SECRET`; activate the web app in the LINE Login channel, add `https://<host>/api/auth/callback/line` as its callback URL, and obtain Email address permission. LINE sign-in is rejected when it does not return an email address.
+
+OAuth identities with an email matching an existing password account are linked automatically. New OAuth users are created without a local password.
+
 ## Verify before committing
 
 ```bash

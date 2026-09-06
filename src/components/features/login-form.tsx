@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { loginAction, type FormState } from "@/actions/auth.actions";
+import { OAuthSignInButtons } from "@/components/features/OAuthSignInButtons";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,8 +21,15 @@ import {
   FieldError,
   FieldLabel,
 } from "@/components/ui/field";
+import type { OAuthProviderId } from "@/lib/auth-providers";
 
-export function LoginForm() {
+export function LoginForm({
+  providers,
+  oauthError,
+}: {
+  providers: OAuthProviderId[];
+  oauthError?: string;
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     async (prev, fd) => await loginAction(prev, fd),
     {}
@@ -48,6 +56,7 @@ export function LoginForm() {
             </FieldContent>
           </Field>
           {state.error && <FieldError>{state.error}</FieldError>}
+          {oauthError && <FieldError>{oauthError}</FieldError>}
         </CardContent>
         <CardFooter className="mt-6 flex-col gap-3">
           <Button type="submit" className="w-full" disabled={pending}>
@@ -59,6 +68,7 @@ export function LoginForm() {
               Register
             </Link>
           </p>
+          <OAuthSignInButtons providers={providers} />
         </CardFooter>
       </form>
     </Card>
