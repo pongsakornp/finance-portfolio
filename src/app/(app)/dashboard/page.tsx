@@ -5,6 +5,7 @@ import { users } from "@/lib/db/schema";
 import { baseRate } from "@/lib/services/fx-service";
 import {
   buildHoldingsView,
+  getUserPortfolios,
   getUserTransactions,
 } from "@/lib/services/view-service";
 import { monthlyBreakdown, toUsdReportTxs } from "@/lib/services/report-service";
@@ -20,12 +21,14 @@ import { MonthlyBarsChart } from "@/components/charts/monthly-bars-chart";
 import {
   HoldingsList,
 } from "@/components/features/holdings-list";
+import { TransactionDialog } from "@/components/features/transaction-dialog";
 import { CompactMoney } from "@/components/features/compact-money";
 import { DashboardRiskMovers } from "@/components/features/dashboard-risk-movers";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
 import { PL, PLPct } from "@/components/pl";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -37,13 +40,14 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const userId = await requireUserId();
-  const [userRows, txs] = await Promise.all([
+  const [userRows, txs, portfolios] = await Promise.all([
     db
       .select({ baseCurrency: users.baseCurrency, plView: users.plView })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
     getUserTransactions(userId),
+    getUserPortfolios(userId),
   ]);
   const user = userRows[0];
   const baseCurrency = user?.baseCurrency ?? "USD";
@@ -170,6 +174,9 @@ export default async function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Holdings ({holdings.length})</CardTitle>
+          <CardAction>
+            <TransactionDialog portfolios={portfolios} />
+          </CardAction>
         </CardHeader>
         <CardContent>
           {holdings.length === 0 ? (

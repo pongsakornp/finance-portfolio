@@ -6,7 +6,7 @@ import { assets, benchmarkCache, priceHistory } from "@/lib/db/schema";
 import type { Asset } from "@/lib/services/quote-service";
 import { setYahooSymbol } from "@/lib/services/quote-service";
 import { fetchCoinMarketCapHistory } from "@/lib/services/coinmarketcap-service";
-import { getRate, loadFxHistory } from "@/lib/services/fx-service";
+import { baseRate, getRate, loadFxHistory } from "@/lib/services/fx-service";
 import { dayKey } from "@/lib/utils/date";
 
 const HISTORY_YEARS = 5;
@@ -281,6 +281,112 @@ export async function portfolioSeries(
   const series = firstNonZero === -1 ? [] : points.slice(firstNonZero);
 
   return series.filter((p) => p.day >= windowStart);
+}
+
+/**
+ * Daily unrealized P/L in USD, using the same average-cost rules as holdings.
+ * Cost basis is converted at each day's FX rate so the final point matches the
+ * portfolio's current display calculation.
+ */
+export async function unrealizedPlSeries(
+  txs: TxWithAsset[],
+  days: number
+): Promise<SeriesPoint[]> {
+  if (txs.length === 0) return [];
+
+  const distinctAssets = [...new Map(txs.map((t) => [t.asset.id, t.asset])).values()];
+  const firstTxDay = dayKey(new Date(Math.min(...txs.map((t) => t.occurredAt.getTime()))));
+  const windowStart = dayKey(new Date(Date.now() - (days - 1) * 86400_000));
+  const fromDay = firstTxDay < windowStart ? firstTxDay : windowStart;
+
+  await Promise.all(distinctAssets.map(ensureHistory));
+  const closeMaps = new Map<string, Map<string, number>>();
+  await Promise.all(
+    distinctAssets.map(async (asset) => closeMaps.set(asset.id, await loadCloses(asset.id, fromDay)))
+  );
+
+  const nonUsd = new Set(distinctAssets.map((asset) => asset.currency).filter((currency) => currency !== "USD"));
+  const usdRates = new Map<string, number>();
+  await Promise.all(
+    [...nonUsd].map(async (currency) => usdRates.set(currency, (await getRate(currency, "USD")).toNumber()))
+  );
+  const fxByDay = await loadFxHistory([...nonUsd], fromDay);
+
+  const timeline = [...new Set(
+    [...closeMaps.values()].flatMap((closes) => [...closes.keys()].filter((day) => day >= fromDay))
+  )].sort();
+  if (timeline.length === 0) return [];
+
+  const txsAsc = [...txs].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  const positions = new Map<string, { qty: Decimal; cost: Decimal }>();
+  const lastClose = new Map<string, Decimal>();
+  const points: Array<SeriesPoint & { started: boolean }> = [];
+  let transactionIndex = 0;
+
+  for (const day of timeline) {
+    while (
+      transactionIndex < txsAsc.length &&
+      dayKey(txsAsc[transactionIndex].occurredAt) <= day
+    ) {
+      const transaction = txsAsc[transactionIndex++];
+      const position = positions.get(transaction.asset.id) ?? {
+        qty: new Decimal(0),
+        cost: new Decimal(0),
+      };
+      const quantity = new Decimal(transaction.quantity);
+      const price = new Decimal(transaction.price);
+      const fee = new Decimal(transaction.fee ?? 0);
+
+      if (transaction.type === "buy") {
+        position.qty = position.qty.plus(quantity);
+        position.cost = position.cost.plus(quantity.mul(price)).plus(fee);
+      } else if (position.qty.gt(0)) {
+        const sold = Decimal.min(quantity, position.qty);
+        position.cost = position.cost.minus(position.cost.div(position.qty).mul(sold));
+        position.qty = position.qty.minus(sold);
+        if (position.qty.isZero()) position.cost = new Decimal(0);
+      }
+      positions.set(transaction.asset.id, position);
+    }
+
+    let unrealized = new Decimal(0);
+    let started = false;
+    for (const asset of distinctAssets) {
+      const close = closeMaps.get(asset.id)?.get(day);
+      if (close != null) lastClose.set(asset.id, new Decimal(close));
+      const position = positions.get(asset.id);
+      const last = lastClose.get(asset.id);
+      if (!position || !last || position.qty.lte(0)) continue;
+
+      started = true;
+      const fx = asset.currency === "USD"
+        ? new Decimal(1)
+        : new Decimal(fxByDay.get(asset.currency)?.get(day) ?? usdRates.get(asset.currency) ?? 1);
+      unrealized = unrealized.plus(position.qty.mul(last).minus(position.cost).mul(fx));
+    }
+    points.push({ day, value: unrealized.toDecimalPlaces(2).toNumber(), started });
+  }
+
+  const firstStarted = points.findIndex((point) => point.started);
+  return (firstStarted === -1 ? [] : points.slice(firstStarted))
+    .filter((point) => point.day >= windowStart)
+    .map(({ day, value }) => ({ day, value }));
+}
+
+/** Converts USD historical values into the user's base currency using daily FX. */
+export async function convertUsdSeries(
+  points: SeriesPoint[],
+  baseCurrency: string
+): Promise<SeriesPoint[]> {
+  if (baseCurrency === "USD" || points.length === 0) return points;
+  const current = await baseRate(baseCurrency);
+  const history = await loadFxHistory([baseCurrency], points[0].day);
+  const baseToUsd = history.get(baseCurrency);
+  return points.map((point) => {
+    const rate = baseToUsd?.get(point.day);
+    const usdToBase = rate && rate > 0 ? 1 / rate : current;
+    return { day: point.day, value: Math.round(point.value * usdToBase * 100) / 100 };
+  });
 }
 
 const BENCHMARK_INDEX = "%5EGSPC";

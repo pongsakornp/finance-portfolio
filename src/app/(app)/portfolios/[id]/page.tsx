@@ -2,9 +2,12 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { DownloadIcon } from "lucide-react";
 
+import { AllocationDonut } from "@/components/charts/allocation-donut";
+import { UnrealizedPLChart } from "@/components/charts/unrealized-pl-chart";
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
 import { TransactionLedger } from "@/components/features/transaction-ledger";
+import { TransactionDialog } from "@/components/features/transaction-dialog";
 import { RenamePortfolioDialog } from "@/components/features/rename-portfolio-dialog";
 import { CompactMoney } from "@/components/features/compact-money";
 import { StatCard, TodayFooter } from "@/components/features/stat-card";
@@ -12,6 +15,7 @@ import { PL, PLPct } from "@/components/pl";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardHeader,
   CardTitle,
@@ -64,6 +68,23 @@ export default async function PortfolioDetailPage({
   const t = view.totalsUsd;
   const holdings = [...view.rows].filter((r) => r.position.qty > 0);
   const ledger = [...txs].reverse();
+  const allocationRows = holdings
+    .map((holding) => ({
+      label: holding.asset.symbol,
+      value: Math.round(holding.valueUsd * rate * 100) / 100,
+    }))
+    .sort((a, b) => b.value - a.value);
+  const allocation = allocationRows.length > 8
+    ? [
+        ...allocationRows.slice(0, 8),
+        {
+          label: "Other",
+          value: Math.round(
+            allocationRows.slice(8).reduce((total, holding) => total + holding.value, 0) * 100
+          ) / 100,
+        },
+      ]
+    : allocationRows;
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,6 +130,25 @@ export default async function PortfolioDetailPage({
           label="Realized"
           title={<PL value={t.realizedPL * rate} currency={baseCurrency} compact />}
         />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Unrealized P/L</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UnrealizedPLChart portfolioId={id} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Allocation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AllocationDonut data={allocation} currency={baseCurrency} />
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -159,6 +199,9 @@ export default async function PortfolioDetailPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Transactions ({ledger.length})</CardTitle>
+          <CardAction>
+            <TransactionDialog portfolios={portfoliosList} defaultPortfolioId={id} />
+          </CardAction>
         </CardHeader>
         <CardContent>
           {ledger.length === 0 ? (
