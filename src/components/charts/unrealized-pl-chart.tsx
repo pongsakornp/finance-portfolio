@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { PL } from "@/components/pl";
@@ -12,44 +12,19 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { CHART_EMPTY_TEXT, CHART_RANGES } from "@/components/charts/chart-constants";
+import { useSeriesFetch } from "@/components/charts/use-series-fetch";
 import { fmtMoneyCompact } from "@/lib/utils/money";
 
 type Point = { day: string; value: number };
 
-const ranges = [
-  [30, "1M"],
-  [90, "3M"],
-  [180, "6M"],
-  [365, "1Y"],
-  [1095, "3Y"],
-  [1825, "5Y"],
-] as const;
-
 export function UnrealizedPLChart({ portfolioId }: { portfolioId: string }) {
   const [days, setDays] = useState(90);
-  const [points, setPoints] = useState<Point[]>([]);
-  const [currency, setCurrency] = useState("USD");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/portfolios/${portfolioId}/unrealized-pl?days=${days}`)
-      .then((response) => response.json())
-      .then(
-        (json: { points?: Point[]; currency?: string }) => {
-          if (cancelled) return;
-          setPoints(json.points ?? []);
-          setCurrency(json.currency ?? "USD");
-          setLoading(false);
-        },
-        () => {
-          if (!cancelled) setLoading(false);
-        }
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [days, portfolioId]);
+  const { data, loading, setLoading } = useSeriesFetch<{ points?: Point[]; currency?: string }>(
+    `/api/portfolios/${portfolioId}/unrealized-pl?days=${days}`
+  );
+  const points = data?.points ?? [];
+  const currency = data?.currency ?? "USD";
 
   const config: ChartConfig = {
     unrealized: { label: "Unrealized P/L", color: "var(--chart-2)" },
@@ -69,7 +44,7 @@ export function UnrealizedPLChart({ portfolioId }: { portfolioId: string }) {
         }}
         aria-label="Unrealized P/L range"
       >
-        {ranges.map(([value, label]) => (
+        {CHART_RANGES.map(([value, label]) => (
           <ToggleGroupItem key={value} value={String(value)}>{label}</ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -78,7 +53,7 @@ export function UnrealizedPLChart({ portfolioId }: { portfolioId: string }) {
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
         ) : points.length === 0 ? (
           <Empty className="h-full justify-center">
-            <EmptyDescription>Not enough history yet — add transactions or wait for price history</EmptyDescription>
+            <EmptyDescription>{CHART_EMPTY_TEXT}</EmptyDescription>
           </Empty>
         ) : (
           <ChartContainer config={config} className="aspect-auto h-full w-full">

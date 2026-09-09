@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Area,
   AreaChart,
@@ -20,35 +20,19 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { CHART_EMPTY_TEXT, CHART_RANGES } from "@/components/charts/chart-constants";
+import { useSeriesFetch } from "@/components/charts/use-series-fetch";
 
 type Point = { day: string; pct: number };
 
 export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
   const [days, setDays] = useState(90);
   const [showBenchmark, setShowBenchmark] = useState(true);
-  const [portfolio, setPortfolio] = useState<Point[]>([]);
-  const [benchmark, setBenchmark] = useState<Point[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/performance?days=${days}`)
-      .then((r) => r.json())
-      .then(
-        (json: { portfolio: Point[]; benchmark: Point[] }) => {
-          if (cancelled) return;
-          setPortfolio(json.portfolio ?? []);
-          setBenchmark(json.benchmark ?? []);
-          setLoading(false);
-        },
-        () => {
-          if (!cancelled) setLoading(false);
-        }
-      );
-    return () => {
-      cancelled = true;
-    };
-  }, [days]);
+  const { data, loading, setLoading } = useSeriesFetch<{ portfolio: Point[]; benchmark: Point[] }>(
+    `/api/performance?days=${days}`
+  );
+  const portfolio = data?.portfolio ?? [];
+  const benchmark = data?.benchmark ?? [];
 
   const merged = portfolio.map((p) => ({
     day: p.day,
@@ -66,15 +50,6 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
     benchmark: { label: "S&P 500", color: "var(--muted-foreground)" },
   };
 
-  const ranges = [
-    [30, "1M"],
-    [90, "3M"],
-    [180, "6M"],
-    [365, "1Y"],
-    [1095, "3Y"],
-    [1825, "5Y"],
-  ] as const;
-
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -83,9 +58,13 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
           size="sm"
           spacing={0}
           value={[String(days)]}
-          onValueChange={(v) => v[0] && setDays(Number(v[0]))}
+          onValueChange={(v) => {
+            if (!v[0]) return;
+            setLoading(true);
+            setDays(Number(v[0]));
+          }}
         >
-          {ranges.map(([d, label]) => (
+          {CHART_RANGES.map(([d, label]) => (
             <ToggleGroupItem key={d} value={String(d)}>
               {label}
             </ToggleGroupItem>
@@ -106,9 +85,7 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
       <div className="h-[280px]">
         {merged.length === 0 ? (
           <Empty className="h-full justify-center">
-            <EmptyDescription>
-              Not enough history yet — add transactions or wait for price history
-            </EmptyDescription>
+            <EmptyDescription>{CHART_EMPTY_TEXT}</EmptyDescription>
           </Empty>
         ) : (
           <ChartContainer config={config} className="aspect-auto h-full w-full">
