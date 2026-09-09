@@ -77,7 +77,7 @@ export function AllocationDonut({
             />
           }
         />
-        <ChartLegend content={<ChartLegendContent nameKey="id" />} />
+        <ChartLegend content={<ChartLegendContent nameKey="id" className="flex-wrap" />} />
       </PieChart>
     </ChartContainer>
   );

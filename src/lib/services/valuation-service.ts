@@ -196,21 +196,31 @@ export type TxWithAsset = {
   asset: Asset;
 };
 
-/**
- * Reconstructs the portfolio's daily USD value by walking transactions forward
- * through each asset's historical closes. Non-USD assets use per-day FX (falls
- * back to today's rate for a missing day).
- */
-export async function portfolioSeries(
+export type SeriesContext = {
+  distinctAssets: Asset[];
+  txsAsc: TxWithAsset[];
+  windowStart: string;
+  closeMaps: Map<string, Map<string, number>>;
+  fxByDay: Map<string, Map<string, number>>;
+  usdRates: Map<string, number>;
+  timeline: string[];
+};
+
+export type DayState = {
+  day: string;
+  positions: Map<string, { qty: Decimal; cost: Decimal }>;
+  lastClose: Map<string, Decimal>;
+};
+
+/** Shared setup: asset history backfill, closes, FX, and the chronological timeline. */
+async function buildSeriesContext(
   txs: TxWithAsset[],
   days: number
-): Promise<SeriesPoint[]> {
-  if (txs.length === 0) return [];
+): Promise<SeriesContext | null> {
+  if (txs.length === 0) return null;
 
   const distinctAssets = [...new Map(txs.map((t) => [t.asset.id, t.asset])).values()];
-  const firstTxDay = dayKey(
-    new Date(Math.min(...txs.map((t) => t.occurredAt.getTime())))
-  );
+  const firstTxDay = dayKey(new Date(Math.min(...txs.map((t) => t.occurredAt.getTime()))));
   const windowStart = dayKey(new Date(Date.now() - (days - 1) * 86400_000));
   const fromDay = firstTxDay < windowStart ? firstTxDay : windowStart;
 
@@ -231,45 +241,79 @@ export async function portfolioSeries(
   // per-day FX so multi-currency historical valuation isn't pinned to today's rate
   const fxByDay = await loadFxHistory([...nonUsd], fromDay);
 
-  // chronological transaction buckets
   const txsAsc = [...txs].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const daysUnion = new Set<string>();
   closeMaps.forEach((m) => m.forEach((_, d) => d >= fromDay && daysUnion.add(d)));
   const timeline = [...daysUnion].sort();
-  if (timeline.length === 0) return [];
+  if (timeline.length === 0) return null;
 
-  const holdings = new Map<string, Decimal>();
-  let ti = 0;
-  const points: SeriesPoint[] = [];
+  return { distinctAssets, txsAsc, windowStart, closeMaps, fxByDay, usdRates, timeline };
+}
+
+/**
+ * Walks the timeline applying avg-cost semantics (same rules as computePosition in
+ * holdings-service) and yields per-day positions + last-known close for every asset.
+ */
+export function* walkSeries(ctx: SeriesContext): Generator<DayState> {
+  const positions = new Map<string, { qty: Decimal; cost: Decimal }>();
   const lastClose = new Map<string, Decimal>();
-
-  for (const day of timeline) {
+  let ti = 0;
+  for (const day of ctx.timeline) {
     while (
-      ti < txsAsc.length &&
-      dayKey(new Date(txsAsc[ti].occurredAt.getTime())) <= day
+      ti < ctx.txsAsc.length &&
+      dayKey(new Date(ctx.txsAsc[ti].occurredAt.getTime())) <= day
     ) {
-      const t = txsAsc[ti++];
-      const prevQty = holdings.get(t.asset.id) ?? new Decimal(0);
+      const t = ctx.txsAsc[ti++];
+      const position = positions.get(t.asset.id) ?? { qty: new Decimal(0), cost: new Decimal(0) };
       const q = new Decimal(t.quantity);
       if (t.type === "buy") {
-        holdings.set(t.asset.id, prevQty.plus(q));
-      } else if (t.type === "sell") {
-        holdings.set(t.asset.id, Decimal.max(0, prevQty.minus(q)));
+        position.qty = position.qty.plus(q);
+        position.cost = position.cost
+          .plus(q.mul(new Decimal(t.price)))
+          .plus(new Decimal(t.fee ?? 0));
+      } else if (position.qty.gt(0)) {
+        const sold = Decimal.min(q, position.qty);
+        position.cost = position.cost.minus(position.cost.div(position.qty).mul(sold));
+        position.qty = position.qty.minus(sold);
+        if (position.qty.isZero()) position.cost = new Decimal(0);
       }
+      positions.set(t.asset.id, position);
     }
-    let dayValue = new Decimal(0);
-    for (const a of distinctAssets) {
-      const rawClose = closeMaps.get(a.id)?.get(day);
+    for (const a of ctx.distinctAssets) {
+      const rawClose = ctx.closeMaps.get(a.id)?.get(day);
       if (rawClose != null) lastClose.set(a.id, new Decimal(rawClose));
+    }
+    yield { day, positions, lastClose };
+  }
+}
+
+/** Per-day FX multiplier (1 for USD), falling back to today's rate on a missing day. */
+function dayFx(ctx: SeriesContext, day: string, currency: string): Decimal {
+  return currency === "USD"
+    ? new Decimal(1)
+    : new Decimal(ctx.fxByDay.get(currency)?.get(day) ?? ctx.usdRates.get(currency) ?? 1);
+}
+
+/**
+ * Reconstructs the portfolio's daily USD value by walking transactions forward
+ * through each asset's historical closes. Non-USD assets use per-day FX (falls
+ * back to today's rate for a missing day).
+ */
+export async function portfolioSeries(
+  txs: TxWithAsset[],
+  days: number
+): Promise<SeriesPoint[]> {
+  const ctx = await buildSeriesContext(txs, days);
+  if (!ctx) return [];
+
+  const points: SeriesPoint[] = [];
+  for (const { day, positions, lastClose } of walkSeries(ctx)) {
+    let dayValue = new Decimal(0);
+    for (const a of ctx.distinctAssets) {
+      const qty = positions.get(a.id)?.qty ?? new Decimal(0);
       const lc = lastClose.get(a.id);
-      const qty = holdings.get(a.id) ?? new Decimal(0);
       if (lc != null && qty.gt(0)) {
-        const cur = a.currency;
-        const perDay =
-          cur === "USD"
-            ? new Decimal(1)
-            : new Decimal(fxByDay.get(cur)?.get(day) ?? usdRates.get(cur) ?? 1);
-        dayValue = dayValue.plus(qty.mul(lc).mul(perDay));
+        dayValue = dayValue.plus(qty.mul(lc).mul(dayFx(ctx, day, a.currency)));
       }
     }
     points.push({ day, value: dayValue.toDecimalPlaces(2).toNumber() });
@@ -280,7 +324,7 @@ export async function portfolioSeries(
   const firstNonZero = points.findIndex((p) => p.value > 0);
   const series = firstNonZero === -1 ? [] : points.slice(firstNonZero);
 
-  return series.filter((p) => p.day >= windowStart);
+  return series.filter((p) => p.day >= ctx.windowStart);
 }
 
 /**
@@ -292,84 +336,28 @@ export async function unrealizedPlSeries(
   txs: TxWithAsset[],
   days: number
 ): Promise<SeriesPoint[]> {
-  if (txs.length === 0) return [];
+  const ctx = await buildSeriesContext(txs, days);
+  if (!ctx) return [];
 
-  const distinctAssets = [...new Map(txs.map((t) => [t.asset.id, t.asset])).values()];
-  const firstTxDay = dayKey(new Date(Math.min(...txs.map((t) => t.occurredAt.getTime()))));
-  const windowStart = dayKey(new Date(Date.now() - (days - 1) * 86400_000));
-  const fromDay = firstTxDay < windowStart ? firstTxDay : windowStart;
-
-  await Promise.all(distinctAssets.map(ensureHistory));
-  const closeMaps = new Map<string, Map<string, number>>();
-  await Promise.all(
-    distinctAssets.map(async (asset) => closeMaps.set(asset.id, await loadCloses(asset.id, fromDay)))
-  );
-
-  const nonUsd = new Set(distinctAssets.map((asset) => asset.currency).filter((currency) => currency !== "USD"));
-  const usdRates = new Map<string, number>();
-  await Promise.all(
-    [...nonUsd].map(async (currency) => usdRates.set(currency, (await getRate(currency, "USD")).toNumber()))
-  );
-  const fxByDay = await loadFxHistory([...nonUsd], fromDay);
-
-  const timeline = [...new Set(
-    [...closeMaps.values()].flatMap((closes) => [...closes.keys()].filter((day) => day >= fromDay))
-  )].sort();
-  if (timeline.length === 0) return [];
-
-  const txsAsc = [...txs].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
-  const positions = new Map<string, { qty: Decimal; cost: Decimal }>();
-  const lastClose = new Map<string, Decimal>();
   const points: Array<SeriesPoint & { started: boolean }> = [];
-  let transactionIndex = 0;
-
-  for (const day of timeline) {
-    while (
-      transactionIndex < txsAsc.length &&
-      dayKey(txsAsc[transactionIndex].occurredAt) <= day
-    ) {
-      const transaction = txsAsc[transactionIndex++];
-      const position = positions.get(transaction.asset.id) ?? {
-        qty: new Decimal(0),
-        cost: new Decimal(0),
-      };
-      const quantity = new Decimal(transaction.quantity);
-      const price = new Decimal(transaction.price);
-      const fee = new Decimal(transaction.fee ?? 0);
-
-      if (transaction.type === "buy") {
-        position.qty = position.qty.plus(quantity);
-        position.cost = position.cost.plus(quantity.mul(price)).plus(fee);
-      } else if (position.qty.gt(0)) {
-        const sold = Decimal.min(quantity, position.qty);
-        position.cost = position.cost.minus(position.cost.div(position.qty).mul(sold));
-        position.qty = position.qty.minus(sold);
-        if (position.qty.isZero()) position.cost = new Decimal(0);
-      }
-      positions.set(transaction.asset.id, position);
-    }
-
+  for (const { day, positions, lastClose } of walkSeries(ctx)) {
     let unrealized = new Decimal(0);
     let started = false;
-    for (const asset of distinctAssets) {
-      const close = closeMaps.get(asset.id)?.get(day);
-      if (close != null) lastClose.set(asset.id, new Decimal(close));
-      const position = positions.get(asset.id);
-      const last = lastClose.get(asset.id);
+    for (const a of ctx.distinctAssets) {
+      const position = positions.get(a.id);
+      const last = lastClose.get(a.id);
       if (!position || !last || position.qty.lte(0)) continue;
-
       started = true;
-      const fx = asset.currency === "USD"
-        ? new Decimal(1)
-        : new Decimal(fxByDay.get(asset.currency)?.get(day) ?? usdRates.get(asset.currency) ?? 1);
-      unrealized = unrealized.plus(position.qty.mul(last).minus(position.cost).mul(fx));
+      unrealized = unrealized.plus(
+        position.qty.mul(last).minus(position.cost).mul(dayFx(ctx, day, a.currency))
+      );
     }
     points.push({ day, value: unrealized.toDecimalPlaces(2).toNumber(), started });
   }
 
   const firstStarted = points.findIndex((point) => point.started);
   return (firstStarted === -1 ? [] : points.slice(firstStarted))
-    .filter((point) => point.day >= windowStart)
+    .filter((point) => point.day >= ctx.windowStart)
     .map(({ day, value }) => ({ day, value }));
 }
 
