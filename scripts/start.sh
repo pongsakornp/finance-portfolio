@@ -39,7 +39,7 @@ done
 if [ "$SEED" != "no-seed" ]; then
   PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)"
   DATABASE_URL="postgres://finance:$PASSWORD@127.0.0.1:$DB_PORT/finance" \
-    npx --yes pnpm@10.12.1 seed
+    npx --yes pnpm seed
 fi
 
 echo "[start] $ENV ready: $URL  (db 127.0.0.1:$DB_PORT)"

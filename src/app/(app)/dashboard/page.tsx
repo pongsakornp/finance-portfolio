@@ -15,9 +15,11 @@ import { fmtMonthYear } from "@/lib/utils/date";
 import { holdingPl, typeLabel, typeUnitLabel } from "@/lib/utils/holdings";
 import { fmtMoney, fmtQty } from "@/lib/utils/money";
 
-import { AllocationDonut } from "@/components/charts/allocation-donut";
-import { PerformanceChart } from "@/components/charts/performance-chart";
-import { MonthlyBarsChart } from "@/components/charts/monthly-bars-chart";
+import {
+  AllocationDonut,
+  MonthlyBarsChart,
+  PerformanceChart,
+} from "@/components/charts/lazy";
 import {
   HoldingsList,
 } from "@/components/features/holdings-list";

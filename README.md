@@ -6,13 +6,15 @@ Stack: Next.js 16 · Tailwind CSS v4 · PostgreSQL + Drizzle · Auth.js v5 · Re
 
 ## Quick start (local)
 
+Requires Node 22+ (`.nvmrc` pins 24).
+
 ```bash
-npx --yes pnpm@10 install
+npx --yes pnpm install
 cp .env.example .env            # set DATABASE_URL + AUTH_SECRET + COINMARKETCAP_API_KEY
 docker compose up -d db         # or point DATABASE_URL anywhere Postgres lives
-npx --yes pnpm@10 db:migrate    # create tables
-npx --yes pnpm@10 seed          # optional demo data
-npx --yes pnpm@10 dev           # http://localhost:3000
+npx --yes pnpm db:migrate    # create tables
+npx --yes pnpm seed          # optional demo data
+npx --yes pnpm dev           # http://localhost:3000
 ```
 
 Demo login after seeding: `demo@finance.local` / `demo1234`.
@@ -27,6 +29,21 @@ Demo login after seeding: `demo@finance.local` / `demo1234`.
 ```
 
 The environment name becomes the Compose project name, so containers and the DB volume are namespaced (`<env>_app`, `<env>_db`, `<env>_pgdata`). Multiple environments can run at once — each picks its own free ports (app from 3000, db from 5432). App URL and DB port are printed on success; login is `demo@finance.local` / `demo1234`. Requires `.env` (auto-created from `.env.example`, with `AUTH_SECRET` generated if unset).
+
+## Releases
+
+Releases are cut with [release-please](https://github.com/googleapis/release-please): conventional commits on `main` (`feat:`, `fix:`, …) accumulate into a release PR that bumps `package.json` and updates `CHANGELOG.md`; merging it creates the `vX.Y.Z` tag, a GitHub Release, and the release images.
+
+| Image tag | Source | Meaning |
+|---|---|---|
+| `latest` | release | newest stable release |
+| `X.Y.Z`, `X.Y`, `X` | release | immutable version tags |
+| `sha-<short>` | main / release | exact commit |
+| `edge` | main | latest unreleased `main` |
+
+Images are multi-arch (`linux/amd64`, `linux/arm64`) with SBOM and provenance attestations.
+
+One-time repo setup: Settings → Actions → General → Workflow permissions must be **Read and write** with **Allow GitHub Actions to create and approve pull requests** enabled, or release-please cannot open its PR. That PR is opened by `GITHUB_TOKEN`, so GitHub skips CI on it — review the version/changelog diff before merging (add a `RELEASE_PLEASE_TOKEN` PAT if you want CI on release PRs).
 
 ## Docs
 
@@ -49,5 +66,5 @@ OAuth identities with an email matching an existing password account are linked 
 ## Verify before committing
 
 ```bash
-npx --yes pnpm@10 typecheck && npx --yes pnpm@10 lint && npx --yes pnpm@10 test && npx --yes pnpm@10 build
+npx --yes pnpm typecheck && npx --yes pnpm lint && npx --yes pnpm test && npx --yes pnpm build
 ```

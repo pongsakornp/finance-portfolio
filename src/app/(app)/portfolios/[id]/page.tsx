@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { DownloadIcon } from "lucide-react";
 
-import { AllocationDonut } from "@/components/charts/allocation-donut";
-import { UnrealizedPLChart } from "@/components/charts/unrealized-pl-chart";
+import { AllocationDonut, UnrealizedPLChart } from "@/components/charts/lazy";
 import { HoldingsList } from "@/components/features/holdings-list";
 import { DeleteButton } from "@/components/features/delete-button";
 import { TransactionLedger } from "@/components/features/transaction-ledger";

@@ -1,3 +1,6 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# any pnpm >=9.7 auto-switches to the version pinned in package.json
+manage-package-manager-versions: true

@@ -8,10 +8,10 @@ A multi-user financial portfolio tracker (stocks, ETFs, crypto) built with Next.
 
 ## Commands
 
-Package manager is **pnpm 10** (pinned via `"packageManager"`). Your global pnpm may be older — always run it through npx:
+Package manager is pinned by `"packageManager"` in `package.json` — that field is the single source of truth, never hardcode the version elsewhere. `pnpm-workspace.yaml` enables `manage-package-manager-versions`, so a local pnpm ≥9.7 auto-switches to the pinned version; on machines without pnpm, run it through npx:
 
 ```bash
-P="npx --yes pnpm@10.12.1"
+P="npx --yes pnpm"
 $P install            # install
 $P dev                # dev server on :3000
 $P build              # production build
@@ -82,7 +82,7 @@ Follow this order; copy an existing feature as your template:
 ## Definition of done (every change)
 
 ```bash
-npx --yes pnpm@10.12.1 typecheck && npx --yes pnpm@10.12.1 lint && npx --yes pnpm@10.12.1 test && npx --yes pnpm@10.12.1 build
+npx --yes pnpm typecheck && npx --yes pnpm lint && npx --yes pnpm test && npx --yes pnpm build
 ```
 
 All four green, plus: new domain logic has a test in `tests/`, `revalidatePath` called for every mutated view, ownership enforced, dark mode checked.
@@ -94,7 +94,7 @@ The full loop for any change:
 1. **Code** — follow the [New-feature recipe](#new-feature-recipe). One feature per branch.
 2. **Checks** — gate on the four commands before committing:
    ```bash
-   npx --yes pnpm@10.12.1 typecheck && npx --yes pnpm@10.12.1 lint && npx --yes pnpm@10.12.1 test && npx --yes pnpm@10.12.1 build
+   npx --yes pnpm typecheck && npx --yes pnpm lint && npx --yes pnpm test && npx --yes pnpm build
    ```
    `.env` must exist (copy from `.env.example`) for local ops.
 3. **Deploy on Docker** — build and start the whole Compose project (db + app); migrations run on boot:
@@ -107,7 +107,7 @@ The full loop for any change:
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/api/health   # 200 = healthy
    ```
-   - Login at `/login` (seed demo user: `npx --yes pnpm@10.12.1 seed` → `demo@finance.local` / `demo1234`).
+    - Login at `/login` (seed demo user: `npx --yes pnpm seed` → `demo@finance.local` / `demo1234`).
    - Exercise the changed paths in the browser.
    - Check data landed: `docker compose exec db psql -U finance -d finance -c "SELECT ..."`.
    - Confirm no error lines: `docker compose logs --tail 50 app | grep -iE "error|throw|unhandled"`.
@@ -135,6 +135,10 @@ Rules:
   }
 }
 ```
+
+## Releases
+
+`main` releases via release-please (`.github/workflows/release.yml`). Write [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:` …) — the release PR's version bump and `CHANGELOG.md` derive from them. Merging the release PR tags `vX.Y.Z` and publishes multi-arch GHCR images (`X.Y.Z`, `X.Y`, `X`, `latest`); plain `main` pushes publish `edge` + `sha-…`. Never tag or bump versions by hand. Node runtime is pinned by `.nvmrc` (24) and `engines.node`.
 
 ## Deployment (Dokploy)
 
