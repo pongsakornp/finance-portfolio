@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/pongsakornp/finance-portfolio/compare/v0.2.0...v0.2.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **release:** tag images from the release version ([#38](https://github.com/pongsakornp/finance-portfolio/issues/38)) ([1da0aa8](https://github.com/pongsakornp/finance-portfolio/commit/1da0aa870072796076784e6fe909badf13d087cd))
+
 ## [0.2.0](https://github.com/pongsakornp/finance-portfolio/compare/finance-portfolio-v0.1.0...finance-portfolio-v0.2.0) (2026-09-11)
 
 
