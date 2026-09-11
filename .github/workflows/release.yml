@@ -3,6 +3,11 @@ name: release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.2.0). Used to re-publish an existing release."
+        required: true
 
 # GITHUB_TOKEN-created tags/releases don't trigger other workflows, so the
 # image publish runs in the same workflow, gated on release-please's output.
@@ -22,6 +27,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
@@ -31,15 +37,19 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    env:
+      # the git tag for the release we are publishing (e.g. v0.2.0)
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', inputs.version) || needs.release-please.outputs.tag_name }}
+      RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || needs.release-please.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -52,11 +62,15 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
+          # the workflow runs on a main push, so the event ref is not the
+          # release tag; feed the version explicitly instead of type=semver
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_VERSION }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_VERSION }}
             type=sha,prefix=sha-
+          flavor: |
+            latest=auto
       - uses: docker/build-push-action@v7
         with:
           context: .
