@@ -13,6 +13,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription } from "@/components/ui/empty";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   ChartContainer,
@@ -83,7 +84,9 @@ export function PerformanceChart({ baseLabel }: { baseLabel: string }) {
         </Label>
       </div>
       <div className="h-[280px]">
-        {merged.length === 0 ? (
+        {loading && portfolio.length === 0 ? (
+          <Skeleton className="h-full w-full" />
+        ) : merged.length === 0 ? (
           <Empty className="h-full justify-center">
             <EmptyDescription>{CHART_EMPTY_TEXT}</EmptyDescription>
           </Empty>

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Oxanium } from "next/font/google";
+import { Oxanium } from "next/font/google";
 
 import { cn } from "@/lib/utils";
 
@@ -7,17 +7,7 @@ import { Providers } from "@/components/providers";
 
 import "./globals.css";
 
-const oxanium = Oxanium({subsets:['latin'],variable:'--font-sans'});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const oxanium = Oxanium({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Finance Portfolio",
@@ -39,7 +29,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn(`${geistSans.variable} ${geistMono.variable}`, "h-full antialiased", "font-sans", oxanium.variable)}
+      className={cn("h-full antialiased", "font-sans", oxanium.variable)}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

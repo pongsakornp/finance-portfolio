@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN corepack enable
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -19,7 +19,7 @@ RUN pnpm build
 # self-contained migrator (standalone output doesn't include drizzle-orm/postgres)
 RUN npx esbuild scripts/migrate.mjs --bundle --platform=node --format=cjs --outfile=scripts/migrate.cjs
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
